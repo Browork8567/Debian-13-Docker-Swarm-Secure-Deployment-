@@ -166,8 +166,12 @@ The bootstrap automatically injects:
 ```
 192.168.1.10 mgr-01.lan mgr-01
 ```
+## 🧩 Post Install (Minimal)
 
----
+- on each host
+ssh-copy-id USER@mgr-01
+sudo systemctl start swarm-auto.service
+docker node ls
 
 # 🧱 Architecture
 
@@ -191,32 +195,9 @@ The bootstrap automatically injects:
         4789 (overlay)
 ```
 
-
-## 🧩 Post Install (Minimal)
-
-- on each host
-ssh-copy-id USER@mgr-01
-sudo systemctl start swarm-auto.service
-docker node ls
-
-## 🧪 Validation & Safety
-
-This repo includes:
-
-* Shell script linting (ShellCheck)
-* Secret scanning (Gitleaks)
-* Dependency monitoring (Dependabot)
-
+---
 
 # 🧪 Troubleshooting
-
-common issues to watch out for-
-
-* DNS
-* SSH
-* Docker permissions
-* Firewall
-
 
 ## ❌ Nodes create their own swarm
 
@@ -228,6 +209,7 @@ common issues to watch out for-
 
 **Fix:**
 
+```bash
 ssh mgr-01.lan
 ```
 
@@ -248,7 +230,7 @@ OR log out and back in.
 ## ❌ Swarm port 2377 disappears
 
 **Cause:**
-Docker daemon restart (NOT swarm failure)
+Docker daemon restart (NOT a swarm failure)
 
 Check:
 
@@ -289,7 +271,7 @@ Check:
 ssh -o BatchMode=yes user@mgr-01.lan docker info
 ```
 
-If this fails → FIX SSH or Docker permissions on mgr-01
+If this fails → fix SSH or Docker permissions on mgr-01
 
 ---
 
@@ -319,6 +301,14 @@ Run guard manually:
 sudo /usr/local/bin/docker-mount-guard.sh
 ```
 
----
+
+## 🧪 Validation & Safety
+
+This repo includes:
+
+* Shell script linting (ShellCheck)
+* Secret scanning (Gitleaks)
+* Dependency monitoring (Dependabot)
+
 
 
