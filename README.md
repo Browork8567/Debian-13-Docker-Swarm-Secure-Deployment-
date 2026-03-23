@@ -1,11 +1,11 @@
 # Debian-13-Docker-Swarm-Secure-Deployment
 
-![CI](https://img.shields.io/github/actions/workflow/status/Browork8567/swarm-secure-bootstrap/ci.yml?branch=main)
-![Security Scan](https://img.shields.io/github/actions/workflow/status/Browork8567/swarm-secure-bootstrap/security.yml?branch=main\&label=security)
-![License](https://img.shields.io/github/license/Browork8567/swarm-secure-bootstrap)
-![Last Commit](https://img.shields.io/github/last-commit/Browork8567/swarm-secure-bootstrap)
-![Issues](https://img.shields.io/github/issues/Browork8567/swarm-secure-bootstrap)[![Deploy]
-[![Deploy](https://img.shields.io/badge/Deploy-Homelab-blue?style=for-the-badge)](https://github.com/Browork8567/swarm-secure-bootstrap)
+![CI](https://img.shields.io/github/actions/workflow/status/REPLACE_USERNAME/Debian-13-Docker-Swarm-Secure-Deployment/ci.yml?branch=main\&label=CI\&style=flat-square)
+![Security](https://img.shields.io/github/actions/workflow/status/REPLACE_USERNAME/Debian-13-Docker-Swarm-Secure-Deployment/security.yml?branch=main\&label=Security\&style=flat-square)
+![Last Commit](https://img.shields.io/github/last-commit/REPLACE_USERNAME/Debian-13-Docker-Swarm-Secure-Deployment?style=flat-square)
+![Issues](https://img.shields.io/github/issues/REPLACE_USERNAME/Debian-13-Docker-Swarm-Secure-Deployment?style=flat-square)
+![License](https://img.shields.io/github/license/REPLACE_USERNAME/Debian-13-Docker-Swarm-Secure-Deployment?style=flat-square)
+
 
 
 ## Description
@@ -287,36 +287,7 @@ This repo includes:
 * Gitleaks (secret scanning)
 * Dependabot (dependency updates)
 
----
 
-## 📁 Repository Structure
-
-```text
-swarm-secure-bootstrap/
-│
-├── bootstrap.sh
-├── README.md
-│
-├── config/
-│   └── config.env.example
-│
-├── scripts/
-│   ├── 01-base.sh
-│   ├── 02-docker.sh
-│   ├── 03-ssh.sh
-│   ├── 04-ufw.sh
-│   ├── 05-nas.sh
-│   ├── 06-nas-guard.sh
-│   ├── 07-swarm.sh
-│   └── 08-hardening.sh
-│
-├── systemd/
-│   ├── docker-mount-guard.service
-│   ├── docker-mount-guard.timer
-│   └── swarm-auto.service
-│
-└── secrets/
-    └── README.md
 ```
 
 ---
@@ -330,6 +301,8 @@ Security improvements especially appreciated.
 
 ## 📄 License
 
-MIT License (recommended)
+This project is licensed under the GNU GPLv3 License.
+See the LICENSE file for details.
+
 
 
