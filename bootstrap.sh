@@ -1,47 +1,40 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-echo "[INFO] Secure Swarm Bootstrap Starting..."
+echo "[BOOTSTRAP] Starting full deployment..."
 
-if [ "$EUID" -ne 0 ]; then
-  echo "Run as root (sudo)"
-  exit 1
-fi
+mkdir -p /opt/swarm-secure
+cp config/config.env.example /opt/swarm-secure/config.env || true
 
-CONFIG_FILE="./config/config.env"
+for f in scripts/*.sh; do
+  chmod +x "$f"
+  cp "$f" /usr/local/bin/
+done
 
-if [ ! -f "$CONFIG_FILE" ]; then
-  echo "[ERROR] Missing config.env (copy from example)"
-  exit 1
-fi
+bash scripts/01-base.sh
+sleep 2
 
-source "$CONFIG_FILE"
+bash scripts/02-docker.sh
+sleep 3
 
-chmod +x scripts/*.sh
+bash scripts/03-ssh.sh
+sleep 2
 
-run_step() {
-  echo ""
-  echo "========== $1 =========="
-  sleep 2
-  bash "$2"
-}
+bash scripts/04-ufw.sh
+sleep 2
 
-run_step "Base System" scripts/01-base.sh
-run_step "Docker" scripts/02-docker.sh
-run_step "SSH" scripts/03-ssh.sh
-run_step "Firewall" scripts/04-ufw.sh
-run_step "NAS" scripts/05-nas.sh
-run_step "NAS Guard" scripts/06-nas-guard.sh
-run_step "Swarm" scripts/07-swarm.sh
-run_step "Hardening" scripts/08-hardening.sh
+bash scripts/05-nas.sh
+sleep 2
 
+bash scripts/08-hardening.sh
+
+systemctl daemon-reload
+
+echo "[BOOTSTRAP COMPLETE]"
 echo ""
-echo "======================================="
-echo "[OK] SYSTEM FULLY BOOTSTRAPPED (SECURE)"
-echo "======================================="
+echo "NEXT STEPS:"
+echo "1. Copy SSH key:"
+echo "   ssh-copy-id user@mgr-01"
 echo ""
-echo "NEXT:"
-echo "1. logout/login OR run: newgrp docker"
-echo "2. ssh-copy-id $CURRENT_USER@$MGR1_HOST"
-echo "3. sudo systemctl start swarm-auto.service"
-echo "4. docker node ls"
+echo "2. Start swarm:"
+echo "   systemctl start swarm-auto.service"
