@@ -69,9 +69,9 @@ Treat all swarm nodes as **trusted systems**.
 
 ---
 
-## Cli one step deploy, THIS PIPES IN BASH SO BE AWARE IT
+## 🚀 One-Line Install
 
-
+```bash
 curl -fsSL https://raw.githubusercontent.com/yourusername/swarm-secure-bootstrap/main/bootstrap.sh | sudo bash
 
 ---
