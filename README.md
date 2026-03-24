@@ -1,40 +1,39 @@
-# Docker-Swarm-Secure-Deployment-Built on Debian
+# Debian-13-Docker-Swarm-Secure-Deployment
 
-![CI](https://img.shields.io/github/actions/workflow/status/REPLACE_USERNAME/Debian-13-Docker-Swarm-Secure-Deployment/ci.yml?branch=main\&label=CI\&style=flat-square)
-![Security](https://img.shields.io/github/actions/workflow/status/REPLACE_USERNAME/Debian-13-Docker-Swarm-Secure-Deployment/security.yml?branch=main\&label=Security\&style=flat-square)
-![Last Commit](https://img.shields.io/github/last-commit/REPLACE_USERNAME/Debian-13-Docker-Swarm-Secure-Deployment?style=flat-square)
-![Issues](https://img.shields.io/github/issues/REPLACE_USERNAME/Debian-13-Docker-Swarm-Secure-Deployment?style=flat-square)
-![License](https://img.shields.io/github/license/REPLACE_USERNAME/Debian-13-Docker-Swarm-Secure-Deployment?style=flat-square)
+![CI](https://img.shields.io/github/actions/workflow/status/Browork8567/Debian-13-Docker-Swarm-Secure-Deployment-/ci.yml?branch=main\&label=CI\&style=flat-square)
+![Security](https://img.shields.io/github/actions/workflow/status/Browork8567/Debian-13-Docker-Swarm-Secure-Deployment-/security.yml?branch=main\&label=Security\&style=flat-square)
+![Last Commit](https://img.shields.io/github/last-commit/Browork8567/Debian-13-Docker-Swarm-Secure-Deployment-?style=flat-square)
+![Issues](https://img.shields.io/github/issues/Browork8567/Debian-13-Docker-Swarm-Secure-Deployment-?style=flat-square)
+![License](https://img.shields.io/github/license/Browork8567/Debian-13-Docker-Swarm-Secure-Deployment-?style=flat-square)
 
+[![Deploy](https://img.shields.io/badge/Deploy-Homelab-blue?style=for-the-badge)](https://github.com/Browork8567/Debian-13-Docker-Swarm-Secure-Deployment-)
 
+---
 
-## Description
+## 🚀 Overview
 
-Hi! I have been working in my homelab to migrate to Docker Swarm. As I moved through the process, I created multiple scripts with the assistance of AI. 
+A production-ready, security-focused Docker Swarm bootstrap for Debian-based systems.
 
-AI is much faster than I will ever be at writing scripts, and if a tool exists, why not use it? I directed the architecture, researched best practices, and used them to shape the infrastructure as I went. I kept AI within a limited scope with clear inputs and expected outputs. 
+Designed for homelabs and small clusters, this project provides:
 
-I have tested the scripts, run them myself, and debugged for many hours along the way to reach this point. I thought this was really cool and wanted to share it.
-
-This repo is:
-
-- A production-ready, security-focused Docker Swarm bootstrap for Debian systems.
-- Designed for homelabs and small clusters, this project provides automated node provisioning, secure SSH-based swarm   joining, firewall hardening, and optional NAS integration—without relying on shared state or stored tokens.
-
-This is my first time publishing to GitHub, so if the repo is a little rough, I apologize and I am very grateful for any feedback. 🙂
+* Automated node provisioning
+* Secure SSH-based swarm joining (no token storage)
+* Firewall hardening (UFW + Fail2Ban)
+* Optional NAS integration
+* Idempotent, re-runnable infrastructure
 
 ---
 
 ## 📦 Features
 
-* 🔐 Secure Docker install (official repo)
-* 🔑 SSH key automation + permissions fix
-* 🔥 UFW firewall (Swarm-safe rules)
-* 🚫 Fail2Ban (5 attempts → 5-minute ban)
-* 🔄 Auto Swarm join (SSH-based, no shared tokens)
-* 💾 Optional NAS mount + health guard
-* 🧪 CI validation + secret scanning ready
-* ♻️ Idempotent design (safe to rerun)
+* Secure Docker install (official repository)
+* SSH key automation + permissions fix
+* UFW firewall (Swarm-safe rules)
+* Fail2Ban (5 attempts → 5-minute ban)
+* Auto Swarm join (SSH-based, no shared tokens)
+* Optional NAS mount + health guard
+* CI validation + secret scanning ready
+* Idempotent design (safe to rerun)
 
 ---
 
@@ -47,7 +46,7 @@ Treat all swarm nodes as **trusted systems**.
 
 ## 🧱 Architecture
 
-```text
+```
                     +--------------+
                     |   mgr-01     |
                     |   (Leader)   |
@@ -69,14 +68,8 @@ Treat all swarm nodes as **trusted systems**.
 
 ---
 
-## 🚀 One-Line Install
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/yourusername/swarm-secure-bootstrap/main/bootstrap.sh | sudo bash
-
----
-
-##  Start
+## ⚡ Quick Start
 
 ### 1. Download the repo
 
@@ -88,13 +81,13 @@ Download ZIP from GitHub and extract.
 
 Edit:
 
-```bash
+```
 config/config.env
 ```
 
 Update values:
 
-```bash
+```
 MGR1_HOSTNAME="mgr-01.lan"
 MGR1_IP="192.168.1.10"
 
@@ -126,13 +119,13 @@ ssh-copy-id <user>@mgr-01.lan
 
 ### 5. Start Swarm
 
-Primary node:
+On primary node:
 
 ```bash
 sudo systemctl start swarm-auto.service
 ```
 
-Other nodes:
+On all other nodes:
 
 ```bash
 sudo systemctl start swarm-auto.service
@@ -152,7 +145,9 @@ docker node ls
 
 ### Hostnames
 
-```bash
+Each node MUST have a unique hostname:
+
+```
 mgr-01
 mgr-02
 mgr-03
@@ -169,9 +164,11 @@ sudo hostnamectl set-hostname mgr-01
 
 ### DNS (REQUIRED)
 
+You MUST ensure all nodes can resolve the primary manager.
+
 #### Option A — Local DNS (Recommended)
 
-```text
+```
 mgr-01.lan → 192.168.1.10
 mgr-02.lan → 192.168.1.11
 mgr-03.lan → 192.168.1.12
@@ -181,15 +178,17 @@ mgr-03.lan → 192.168.1.12
 
 #### Option B — /etc/hosts fallback
 
-Automatically injected:
+The bootstrap automatically injects:
 
-```bash
+```
 192.168.1.10 mgr-01.lan mgr-01
 ```
 
 ---
 
 ## 🧩 Post Install
+
+Run on each host:
 
 ```bash
 ssh-copy-id USER@mgr-01
@@ -205,8 +204,8 @@ docker node ls
 * No open LAN firewall
 * SSH restricted to admin IP
 * Fail2Ban enabled (5 attempts → 5-minute ban)
-* Secrets stored in Docker (not repo)
-* Swarm ports restricted to internal network
+* Secrets stored in Docker (not in repo)
+* Swarm ports restricted to internal network only
 
 ---
 
@@ -218,7 +217,7 @@ docker node ls
 ssh mgr-01.lan
 ```
 
-Fix DNS or SSH if this fails.
+If this fails → fix DNS or SSH.
 
 ---
 
@@ -227,6 +226,8 @@ Fix DNS or SSH if this fails.
 ```bash
 newgrp docker
 ```
+
+OR log out and back in.
 
 ---
 
@@ -273,7 +274,46 @@ This repo includes:
 * Gitleaks (secret scanning)
 * Dependabot (dependency updates)
 
+---
 
+## 📁 Repository Structure
+
+```
+swarm-secure-bootstrap/
+│
+├── README.md
+├── bootstrap.sh
+│
+├── config/
+│   └── config.env.example
+│
+├── scripts/
+│   ├── 01-base.sh
+│   ├── 02-docker.sh
+│   ├── 03-ssh.sh
+│   ├── 04-ufw.sh
+│   ├── 05-nas.sh
+│   ├── 06-nas-guard.sh
+│   ├── 07-swarm.sh
+│   ├── 08-hardening.sh
+│   └── fail2ban.local
+│
+├── systemd/
+│   ├── docker-mount-guard.service
+│   ├── docker-mount-guard.timer
+│   └── swarm-auto.service
+│
+├── portainer/
+│   └── stack.yml
+│
+├── secrets/
+│   └── README.md
+│
+└── .github/
+    └── workflows/
+        ├── ci.yml
+        ├── security.yml
+        └── release.yml
 ```
 
 ---
@@ -289,6 +329,3 @@ Security improvements especially appreciated.
 
 This project is licensed under the GNU GPLv3 License.
 See the LICENSE file for details.
-
-
-

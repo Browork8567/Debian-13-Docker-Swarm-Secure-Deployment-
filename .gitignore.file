@@ -1,0 +1,21 @@
+# Secrets
+config/config.env
+*.env
+
+# SSH
+*.pem
+*.key
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+
+# Temp
+*.tmp
