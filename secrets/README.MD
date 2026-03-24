@@ -11,3 +11,14 @@ Never commit:
 - passwords
 - SSH private keys
 - SMB credentials
+
+## Example
+
+echo "mypassword" | docker secret create db_password -
+
+## Use in service
+
+docker service create \
+  --name app \
+  --secret db_password \
+  nginx
