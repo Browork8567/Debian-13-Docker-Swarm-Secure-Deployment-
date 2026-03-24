@@ -1,4 +1,4 @@
-# Debian-13-Docker-Swarm-Secure-Deployment
+# Docker-Swarm-Secure-Deployment-Built on Debian
 
 ![CI](https://img.shields.io/github/actions/workflow/status/REPLACE_USERNAME/Debian-13-Docker-Swarm-Secure-Deployment/ci.yml?branch=main\&label=CI\&style=flat-square)
 ![Security](https://img.shields.io/github/actions/workflow/status/REPLACE_USERNAME/Debian-13-Docker-Swarm-Secure-Deployment/security.yml?branch=main\&label=Security\&style=flat-square)
@@ -10,32 +10,18 @@
 
 ## Description
 
-Hi! I have been working in my homelab to migrate to Docker Swarm. As I moved through the process, I created multiple scripts with the assistance of AI. However, I have always maintained a security-first posture.
+Hi! I have been working in my homelab to migrate to Docker Swarm. As I moved through the process, I created multiple scripts with the assistance of AI. 
 
-AI is much faster than I will ever be at writing scripts, and if a tool exists, why not use it? I directed the architecture, researched best practices, and used them to shape the infrastructure as I went. I kept AI within a limited scope with clear inputs and expected outputs.
+AI is much faster than I will ever be at writing scripts, and if a tool exists, why not use it? I directed the architecture, researched best practices, and used them to shape the infrastructure as I went. I kept AI within a limited scope with clear inputs and expected outputs. 
 
 I have tested the scripts, run them myself, and debugged for many hours along the way to reach this point. I thought this was really cool and wanted to share it.
 
 This repo is:
+
 - A production-ready, security-focused Docker Swarm bootstrap for Debian systems.
 - Designed for homelabs and small clusters, this project provides automated node provisioning, secure SSH-based swarm   joining, firewall hardening, and optional NAS integration—without relying on shared state or stored tokens.
 
-This is my first time publishing to GitHub, so if the repo is a little rough, I apologize and I am very grateful for any feedback ether on the scripts or how to format the repo in a better way. 🙂
-
-
----
-
-## 🚀 Overview
-
-A production-ready, security-focused Docker Swarm bootstrap for Debian-based systems.
-
-Designed for homelabs and small clusters, this project provides:
-
-* Automated node provisioning
-* Secure SSH-based swarm joining (no token storage)
-* Firewall hardening (UFW + Fail2Ban)
-* Optional NAS integration
-* Idempotent, re-runnable infrastructure
+This is my first time publishing to GitHub, so if the repo is a little rough, I apologize and I am very grateful for any feedback. 🙂
 
 ---
 
