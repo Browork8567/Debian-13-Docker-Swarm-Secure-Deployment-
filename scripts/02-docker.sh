@@ -26,4 +26,16 @@ systemctl enable --now docker
 CURRENT_USER=$(logname 2>/dev/null || echo "${SUDO_USER:-$USER}")
 usermod -aG docker "$CURRENT_USER"
 
-echo "[02] Docker installed. Run 'newgrp docker' or relog."
+echo "[02] Docker installed. 
+
+echo "[INFO] Adding user to docker group..."
+
+usermod -aG docker "$CURRENT_USER"
+
+# Apply immediately (fixes SSH execution issue)
+if ! groups "$CURRENT_USER" | grep -q docker; then
+    echo "[INFO] Applying docker group without logout"
+    newgrp docker <<EOF
+echo "docker group applied"
+EOF
+fi
