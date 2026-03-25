@@ -1,24 +1,27 @@
 #!/bin/bash
 set -e
 
+echo "[INFO] Setting up runtime services..."
 
-install -m 0755 scripts/bin/swarm-health.sh /usr/local/bin/swarm-health.sh
-install -m 0755 scripts/bin/swarm-manager-sync.sh /usr/local/bin/swarm-manager-sync.sh
+SYSTEMD_DIR="/etc/systemd/system"
 
-echo "[INFO] Installing systemd units..."
+SERVICES=(
+swarm-health.service
+swarm-health.timer
+swarm-manager-sync.service
+swarm-manager-sync.timer
+swarm-ufw-sync.service
+swarm-ufw-sync.timer
+docker-mount-guard.service
+docker-mount-guard.timer
+)
 
-cp systemd/*.service /etc/systemd/system/
-cp systemd/*.timer /etc/systemd/system/
+for svc in "${SERVICES[@]}"; do
+    if [[ -f "$SYSTEMD_DIR/$svc" ]]; then
+        systemctl enable --now "$svc"
+    else
+        echo "[WARN] Missing $svc"
+    fi
+done
 
-systemctl daemon-reload
-
-systemctl enable swarm-health.timer
-systemctl enable swarm-manager-sync.timer
-
-systemctl enable docker-mount-guard.timer
-systemctl start docker-mount-guard.timer
-
-systemctl start swarm-health.timer
-systemctl start swarm-manager-sync.timer
-
-echo "[INFO] Runtime installation complete"
+echo "[INFO] Runtime services configured."

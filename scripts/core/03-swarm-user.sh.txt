@@ -3,18 +3,13 @@ set -e
 
 echo "[INFO] Creating swarmd service account..."
 
+if id -u swarmd >/dev/null 2>&1; then
+    echo "[INFO] swarmd user already exists"
+else
 id -u swarmd &>/dev/null || useradd -r -m -d /home/swarmd -s /usr/sbin/nologin swarmd
+fi
 
 usermod -aG docker swarmd
 
-mkdir -p /home/swarmd/.ssh
-
-if [[ ! -f /home/swarmd/.ssh/id_rsa ]]; then
-    sudo -u swarmd ssh-keygen -t rsa -N "" -f /home/swarmd/.ssh/id_rsa
-fi
-
-chmod 700 /home/swarmd/.ssh
-chmod 600 /home/swarmd/.ssh/*
-chown -R swarmd:swarmd /home/swarmd/.ssh
 
 echo "[INFO] swarmd account ready"

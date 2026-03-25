@@ -1,61 +1,67 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
 LOG_FILE="/var/log/swarm-bootstrap.log"
-
-# Ensure root
-if [[ $EUID -ne 0 ]]; then
-  echo "[ERROR] Please run as root"
-  exit 1
-fi
-
 mkdir -p /var/log
 touch "$LOG_FILE"
 
 exec > >(tee -a "$LOG_FILE") 2>&1
 
-echo "======================================"
-echo "[INFO] Swarm Bootstrap Started: $(date)"
-echo "======================================"
+echo "[INFO] Starting Swarm Bootstrap..."
 
-trap 'echo "[ERROR] Script failed at line $LINENO"' ERR
+########################################
+# PRE-FLIGHT: Ensure jq is installed
+########################################
 
-# Log node and role for context
-NODE=$(hostname)
-ROLE=$(jq -r .role /etc/swarm-bootstrap/config.json 2>/dev/null || echo "unknown")
-echo "[INFO] Node: $NODE"
-echo "[INFO] Role: $ROLE"
+echo "[INFO] Checking for jq..."
 
-run_script() {
-  SCRIPT=$1
-  echo "--------------------------------------"
-  echo "[INFO] Running $SCRIPT"
-  echo "--------------------------------------"
+if command -v jq >/dev/null 2>&1; then
+    echo "[INFO] jq already installed"
+else
+    echo "[WARN] jq is required to continue."
+    read -rp "Install jq now? (y/n): " INSTALL_JQ
 
-  bash "$SCRIPT"
+    if [[ "$INSTALL_JQ" =~ ^[Yy]$ ]]; then
+        echo "[INFO] Installing jq..."
 
-  echo "[INFO] Completed $SCRIPT"
-}
+        apt-get update
+        apt-get install -y jq
 
-run_script scripts/core/01-config.sh
+        if command -v jq >/dev/null 2>&1; then
+            echo "[INFO] jq installation successful"
+        else
+            echo "[ERROR] jq installation failed. Exiting."
+            exit 1
+        fi
+    else
+        echo "[ERROR] jq is required. Exiting."
+        exit 1
+    fi
+fi
 
-# Validate config
-jq empty /etc/swarm-bootstrap/config.json || {
-  echo "[ERROR] Invalid config.json"
-  exit 1
-}
+########################################
+# Ensure config directory exists
+########################################
 
-run_script scripts/core/02-dependencies.sh
-run_script scripts/core/03-base.sh
-run_script scripts/core/04-swarm-user.sh
-run_script scripts/core/05-ssh.sh
-run_script scripts/core/06-ufw.sh
-run_script scripts/core/07-nas.sh
-run_script scripts/core/08-swarm.sh
-run_script scripts/core/09-hardening.sh
-run_script scripts/core/10-runtime.sh
+mkdir -p /etc/swarm-bootstrap
 
-echo "======================================"
-echo "[INFO] Bootstrap Completed Successfully"
-echo "Log file: $LOG_FILE"
-echo "======================================"
+########################################
+# Run scripts in order
+########################################
+
+for script in scripts/core/*.sh; do
+    echo "[INFO] Running $script"
+    bash "$script"
+done
+
+########################################
+# Final role output (safe)
+########################################
+
+if [[ -f /etc/swarm-bootstrap/config.json ]]; then
+    ROLE=$(jq -r .role /etc/swarm-bootstrap/config.json)
+else
+    ROLE="unknown"
+fi
+
+echo "[INFO] Bootstrap complete for role: $ROLE"

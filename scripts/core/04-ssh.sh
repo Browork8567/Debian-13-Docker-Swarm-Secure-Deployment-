@@ -1,26 +1,34 @@
 #!/bin/bash
 set -e
 
-CONFIG="/etc/swarm-bootstrap/config.json"
+echo "[INFO] Setting up SSH for swarmd..."
 
-ADMIN_USER=$(jq -r .admin_user "$CONFIG")
-MANAGERS=$(jq -r '.managers[]' "$CONFIG")
+SSH_DIR="/home/swarmd/.ssh"
+KEY_FILE="$SSH_DIR/id_rsa"
 
-echo "[INFO] Configuring SSH trust..."
+mkdir -p "$SSH_DIR"
+chmod 700 "$SSH_DIR"
 
-PUB_KEY=$(cat /home/swarmd/.ssh/id_rsa.pub)
+if [[ ! -f "$KEY_FILE" ]]; then
+    ssh-keygen -t rsa -b 4096 -f "$KEY_FILE" -N ""
+fi
 
-for HOST in $MANAGERS; do
-    echo "[INFO] Setting up SSH on $HOST"
+chmod 600 "$KEY_FILE"
+chmod 644 "$KEY_FILE.pub"
+chown -R swarmd:swarmd "$SSH_DIR"
 
-    # Ensure swarmd user + ssh dir exists
-    ssh "$ADMIN_USER@$HOST" "sudo mkdir -p /home/swarmd/.ssh && sudo chown -R swarmd:swarmd /home/swarmd/.ssh"
+# Load manager list
+MANAGERS=$(jq -r '.managers[]?' /etc/swarm-bootstrap/nodes.json || true)
 
-    # Append restricted key ONLY if not already present
-    ssh "$ADMIN_USER@$HOST" "grep -qxF '$PUB_KEY' /home/swarmd/.ssh/authorized_keys || echo 'no-agent-forwarding,no-port-forwarding,no-X11-forwarding,no-pty $PUB_KEY' | sudo tee -a /home/swarmd/.ssh/authorized_keys > /dev/null"
+for NODE in $MANAGERS; do
+    echo "[INFO] Syncing SSH key to $NODE"
 
-    # Fix permissions
-    ssh "$ADMIN_USER@$HOST" "sudo chmod 700 /home/swarmd/.ssh && sudo chmod 600 /home/swarmd/.ssh/authorized_keys && sudo chown -R swarmd:swarmd /home/swarmd/.ssh"
+    ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no "$NODE" \
+        "mkdir -p ~/.ssh && chmod 700 ~/.ssh"
+
+    ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no "$NODE" \
+        "grep -qxF '$(cat $KEY_FILE.pub)' ~/.ssh/authorized_keys || \
+        echo 'no-agent-forwarding,no-port-forwarding,no-X11-forwarding,no-pty $(cat $KEY_FILE.pub)' >> ~/.ssh/authorized_keys"
 done
 
-echo "[INFO] SSH trust configured"
+echo "[INFO] SSH setup complete."

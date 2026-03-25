@@ -1,10 +1,6 @@
 #!/bin/bash
 set -e
 
-CONFIG="/etc/swarm-bootstrap/config.json"
-
-ADMIN_IP=$(jq -r .admin_ip "$CONFIG")
-
 echo "[INFO] Configuring UFW..."
 
 apt-get install -y ufw
@@ -12,8 +8,14 @@ apt-get install -y ufw
 ufw default deny incoming
 ufw default allow outgoing
 
-# SSH ONLY from admin
-ufw allow from "$ADMIN_IP" to any port 22
+# ALWAYS allow SSH before rules
+ufw allow OpenSSH
+
+ADMIN_IP=$(jq -r .admin_ip /etc/swarm-bootstrap/config.json)
+
+if [[ "$ADMIN_IP" != "null" ]]; then
+    ufw allow from "$ADMIN_IP" to any port 22
+fi
 
 # Swarm ports
 ufw allow 2377/tcp
@@ -23,4 +25,4 @@ ufw allow 4789/udp
 
 ufw --force enable
 
-echo "[INFO] UFW configured"
+echo "[INFO] UFW configured."
