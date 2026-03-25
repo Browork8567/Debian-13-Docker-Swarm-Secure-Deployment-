@@ -10,8 +10,6 @@ echo "[ERROR] Please run as root"
 exit 1
 fi
 
-# Setup logging
-
 mkdir -p /var/log
 touch "$LOG_FILE"
 
@@ -21,17 +19,7 @@ echo "======================================"
 echo "[INFO] Swarm Bootstrap Started: $(date)"
 echo "======================================"
 
-# Error trap
-
 trap 'echo "[ERROR] Script failed at line $LINENO"' ERR
-
-# Ensure jq is installed early
-
-echo "[INFO] Installing dependencies..."
-apt-get update
-apt-get install -y jq
-
-# Script execution helper
 
 run_script() {
 SCRIPT=$1
@@ -44,11 +32,17 @@ bash "$SCRIPT"
 echo "[INFO] Completed $SCRIPT"
 }
 
-# Execute scripts in order
-
 run_script scripts/core/01-config.sh
-run_script scripts/core/02-base.sh
-run_script scripts/core/03-docker.sh
+
+# ✅ Validate config.json
+
+jq empty /etc/swarm-bootstrap/config.json || {
+echo "[ERROR] Invalid config.json"
+exit 1
+}
+
+run_script scripts/core/02-dependencies.sh
+run_script scripts/core/03-base.sh
 run_script scripts/core/04-swarm-user.sh
 run_script scripts/core/05-ssh.sh
 run_script scripts/core/06-ufw.sh

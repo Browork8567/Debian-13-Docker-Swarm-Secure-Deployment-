@@ -1,24 +1,26 @@
 #!/bin/bash
 
 NODES="/etc/swarm-bootstrap/nodes.json"
+CONFIG="/etc/swarm-bootstrap/config.json"
 
 [[ ! -f "$NODES" ]] && exit 0
 
-ADMIN_IP=$(jq -r .admin_ip /etc/swarm-bootstrap/config.json)
+ADMIN_IP=$(jq -r .admin_ip "$CONFIG")
 
-ufw --force reset
-ufw default deny incoming
-ufw default allow outgoing
+echo "[INFO] Syncing UFW rules..."
 
+# Ensure admin access remains
 ufw allow from "$ADMIN_IP" to any port 22
 
+# Allow managers
 for IP in $(jq -r '.managers[]' "$NODES"); do
     ufw allow from "$IP" to any port 22
 done
 
+# Swarm ports
 ufw allow 2377/tcp
 ufw allow 7946/tcp
 ufw allow 7946/udp
 ufw allow 4789/udp
 
-ufw --force enable
+echo "[INFO] UFW sync complete"

@@ -1,13 +1,34 @@
 #!/bin/bash
+set -e
 
 CONFIG="/etc/swarm-bootstrap/config.json"
+NODES="/etc/swarm-bootstrap/nodes.json"
 
-ROLE=$(jq -r .role "$CONFIG")
+echo "[INFO] Syncing swarm node state..."
 
-[[ "$ROLE" != "manager" ]] && exit 0
+mkdir -p /etc/swarm-bootstrap
 
-MANAGERS=$(jq -r '.managers[]' "$CONFIG")
+MANAGERS=()
+WORKERS=()
 
-for TARGET in $MANAGERS; do
-    scp -o ConnectTimeout=3 "$CONFIG" "$TARGET:$CONFIG" >/dev/null 2>&1 || true
+NODE_IDS=$(docker node ls -q)
+
+for ID in $NODE_IDS; do
+    ROLE=$(docker node inspect "$ID" -f '{{.Spec.Role}}')
+    ADDR=$(docker node inspect "$ID" -f '{{.Status.Addr}}')
+
+    if [[ "$ROLE" == "manager" ]]; then
+        MANAGERS+=("\"$ADDR\"")
+    else
+        WORKERS+=("\"$ADDR\"")
+    fi
 done
+
+cat > "$NODES" <<EOF
+{
+  "managers": [$(IFS=,; echo "${MANAGERS[*]}")],
+  "workers": [$(IFS=,; echo "${WORKERS[*]}")]
+}
+EOF
+
+echo "[INFO] nodes.json updated"

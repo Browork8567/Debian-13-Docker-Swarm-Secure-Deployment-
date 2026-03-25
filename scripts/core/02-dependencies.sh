@@ -1,18 +1,17 @@
 #!/bin/bash
 set -e
 
-echo "[INFO] Installing dependencies (Docker + jq)..."
+echo "[INFO] Installing dependencies (Docker + jq + ssh)..."
 
-# Base packages required
 apt-get update
 apt-get install -y \
     ca-certificates \
     curl \
     gnupg \
     lsb-release \
-    jq
+    jq \
+    openssh-client
 
-# Docker repo setup
 install -m 0755 -d /etc/apt/keyrings
 
 curl -fsSL https://download.docker.com/linux/debian/gpg \
@@ -26,16 +25,12 @@ echo \
 
 apt-get update
 
-# Install ONLY required Docker components
 apt-get install -y \
     docker-ce \
     docker-ce-cli \
     containerd.io
 
-# Enable Docker
 systemctl enable docker
 systemctl start docker
 
 echo "[INFO] Dependencies installed successfully"
-
-echo "[INFO] Docker installed successfully"
