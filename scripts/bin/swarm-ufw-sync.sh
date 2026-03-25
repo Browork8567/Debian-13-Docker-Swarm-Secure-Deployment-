@@ -1,7 +1,15 @@
 #!/bin/bash
 
-NODES="/etc/swarm-bootstrap/nodes.json"
 CONFIG="/etc/swarm-bootstrap/config.json"
+NODES="/etc/swarm-bootstrap/nodes.json"
+
+ROLE=$(jq -r .role "$CONFIG")
+
+# Only managers update UFW inbound
+if [[ "$ROLE" != "manager" ]]; then
+    echo "[INFO] Not a manager, skipping UFW sync"
+    exit 0
+fi
 
 [[ ! -f "$NODES" ]] && exit 0
 
@@ -9,10 +17,10 @@ ADMIN_IP=$(jq -r .admin_ip "$CONFIG")
 
 echo "[INFO] Syncing UFW rules..."
 
-# Ensure admin access remains
+# Ensure admin access
 ufw allow from "$ADMIN_IP" to any port 22
 
-# Allow managers
+# Allow manager IPs
 for IP in $(jq -r '.managers[]' "$NODES"); do
     ufw allow from "$IP" to any port 22
 done

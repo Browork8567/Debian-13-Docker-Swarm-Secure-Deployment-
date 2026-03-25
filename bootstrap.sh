@@ -4,10 +4,9 @@ set -e
 LOG_FILE="/var/log/swarm-bootstrap.log"
 
 # Ensure root
-
 if [[ $EUID -ne 0 ]]; then
-echo "[ERROR] Please run as root"
-exit 1
+  echo "[ERROR] Please run as root"
+  exit 1
 fi
 
 mkdir -p /var/log
@@ -21,24 +20,29 @@ echo "======================================"
 
 trap 'echo "[ERROR] Script failed at line $LINENO"' ERR
 
+# Log node and role for context
+NODE=$(hostname)
+ROLE=$(jq -r .role /etc/swarm-bootstrap/config.json 2>/dev/null || echo "unknown")
+echo "[INFO] Node: $NODE"
+echo "[INFO] Role: $ROLE"
+
 run_script() {
-SCRIPT=$1
-echo "--------------------------------------"
-echo "[INFO] Running $SCRIPT"
-echo "--------------------------------------"
+  SCRIPT=$1
+  echo "--------------------------------------"
+  echo "[INFO] Running $SCRIPT"
+  echo "--------------------------------------"
 
-bash "$SCRIPT"
+  bash "$SCRIPT"
 
-echo "[INFO] Completed $SCRIPT"
+  echo "[INFO] Completed $SCRIPT"
 }
 
 run_script scripts/core/01-config.sh
 
-# ✅ Validate config.json
-
+# Validate config
 jq empty /etc/swarm-bootstrap/config.json || {
-echo "[ERROR] Invalid config.json"
-exit 1
+  echo "[ERROR] Invalid config.json"
+  exit 1
 }
 
 run_script scripts/core/02-dependencies.sh

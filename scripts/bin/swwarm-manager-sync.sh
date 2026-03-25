@@ -6,6 +6,12 @@ NODES="/etc/swarm-bootstrap/nodes.json"
 
 echo "[INFO] Syncing swarm node state..."
 
+# Only leader manager updates nodes.json
+if [[ "$(docker node inspect self --format '{{.ManagerStatus.Leader}}')" != "true" ]]; then
+    echo "[INFO] Not leader, skipping nodes.json update"
+    exit 0
+fi
+
 mkdir -p /etc/swarm-bootstrap
 
 MANAGERS=()

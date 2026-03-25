@@ -16,8 +16,8 @@ for HOST in $MANAGERS; do
     # Ensure swarmd user + ssh dir exists
     ssh "$ADMIN_USER@$HOST" "sudo mkdir -p /home/swarmd/.ssh && sudo chown -R swarmd:swarmd /home/swarmd/.ssh"
 
-    # Write restricted key ONLY (overwrite to prevent duplicates)
-    ssh "$ADMIN_USER@$HOST" "echo 'no-agent-forwarding,no-port-forwarding,no-X11-forwarding,no-pty $PUB_KEY' | sudo tee /home/swarmd/.ssh/authorized_keys > /dev/null"
+    # Append restricted key ONLY if not already present
+    ssh "$ADMIN_USER@$HOST" "grep -qxF '$PUB_KEY' /home/swarmd/.ssh/authorized_keys || echo 'no-agent-forwarding,no-port-forwarding,no-X11-forwarding,no-pty $PUB_KEY' | sudo tee -a /home/swarmd/.ssh/authorized_keys > /dev/null"
 
     # Fix permissions
     ssh "$ADMIN_USER@$HOST" "sudo chmod 700 /home/swarmd/.ssh && sudo chmod 600 /home/swarmd/.ssh/authorized_keys && sudo chown -R swarmd:swarmd /home/swarmd/.ssh"
