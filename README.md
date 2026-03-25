@@ -1,4 +1,4 @@
-# Automated-Docker-Swarm-Deployment-Based-On-Debian
+# Docker-Swarm-Bootstrap-for-Debian
 
 
 ![Security](https://img.shields.io/github/actions/workflow/status/Browork8567/Debian-13-Docker-Swarm-Secure-Deployment-/security.yml?branch=main\&label=Security\&style=flat-square)
@@ -10,325 +10,306 @@
 
 ---
 
-## 🚀 Overview
+---
 
-A production-ready, security-focused Docker Swarm bootstrap for Debian-based systems.
+# Docker Swarm Bootstrap for Debian
 
-Designed for homelabs and small clusters, this project provides:
+Automated bootstrap scripts for setting up **Docker Swarm clusters** on fresh Debian installs, including multi-manager support, worker nodes, health checks, and automated recovery.
 
-* Automated node provisioning
-* Secure SSH-based swarm joining (no token storage)
-* Firewall hardening (UFW + Fail2Ban)
-* Optional NAS integration
-* Idempotent, re-runnable infrastructure
+This repo allows you to go from a bare Debian VM to a fully operational Docker Swarm cluster with *interactive setup***, modular scripts, and secure defaults.
 
 ---
 
-## 📦 Features
+## Table of Contents
 
-* Secure Docker install (official repository)
-* SSH key automation + permissions fix
-* UFW firewall (Swarm-safe rules)
-* Fail2Ban (5 attempts → 5-minute ban)
-* Auto Swarm join (SSH-based, no shared tokens)
-* Optional NAS mount + health guard
-* CI validation + secret scanning ready
-* Idempotent design (safe to rerun)
+1. [Overview](#overview)
+2. [Features](#features)
+3. [Requirements](#requirements)
+4. [Architecture](#architecture)
+5. [Script Workflow](#script-workflow)
+6. [Interactive Configuration](#interactive-configuration)
+7. [Node Registry & UFW Sync](#node-registry--ufw-sync)
+8. [Manager Candidate Labels & Promotion Policy](#manager-candidate-labels--promotion-policy)
+9. [Health Checks & Auto-Recovery](#health-checks--auto-recovery)
+10. [Security Model](#security-model)
+11. [Installation / Bootstrap](#installation--bootstrap)
+12. [Post-Bootstrap Verification](#post-bootstrap-verification)
+13. [Troubleshooting](#troubleshooting)
+14. [Optional Improvements](#optional-improvements)
 
 ---
 
-## ⚠️ Security Warning
+## Overview
 
-Docker group = root access.
-Treat all swarm nodes as **trusted systems**.
+This repository provides a modular set of scripts to:
+
+* Install Docker on Debian
+* Configure SSH and system users
+* Initialize or join Docker Swarm (multi-manager capable)
+* Setup UFW firewall rules
+* Enable runtime health checks and auto-recovery
+* Maintain a dynamic node registry (`nodes.json`)
+* Handle NAS integration (optional)
+* Provide modular logging and auditability
 
 ---
 
-## 🧱 Architecture
+## Features
+
+* Interactive configuration for node roles, IPs, admin user, and NAS credentials
+* Automatic leader election among managers
+* Candidate labels for safe manager promotion
+* Health-check-driven node recovery
+* Systemd timers for UFW, health checks, and node sync
+* Secure `swarmd` service account with restricted SSH
+* Dynamic `nodes.json` registry updated by swarm leader
+* Logging of all bootstrap activities for traceability
+
+---
+
+## Requirements
+
+* Debian 12+ (fresh VM recommended)
+* Root access for bootstrap execution
+* Network connectivity between all managers and workers
+* Admin user access for initial SSH setup
+
+**Recommended network:**
+
+* Dedicated Swarm subnet optional but recommended
+* SSH access must be allowed for the `swarmd` service account
+
+---
+
+## Architecture
 
 ```
-                    +--------------+
-                    |   mgr-01     |
-                    |   (Leader)   |
-                    |  Drain Mode  |
-                    +------+-------+
-                           |
-            +--------------+--------------+
-            |              |              |
-     +-------------+ +-------------+ +-------------+
-     |   mgr-02    | |   mgr-03    | |  worker-01  |
-     | manager+wk  | | manager+wk  | |   worker    |
-     +-------------+ +-------------+ +-------------+
-
-        Swarm Ports:
-        - 2377 (manager)
-        - 7946 (gossip)
-        - 4789 (overlay)
++----------------------------+
+|      Bootstrap Script      |
++----------------------------+
+          |
+          v
++----------------------------+
+|  Interactive Config (01)   |
++----------------------------+
+          |
+          v
++----------------------------+
+| Dependencies (02)          |
+| Docker + jq + openssh      |
++----------------------------+
+          |
+          v
++----------------------------+
+| Base / Users (03-04)       |
+| swarmd user & directories  |
++----------------------------+
+          |
+          v
++----------------------------+
+| SSH Trust (05)             |
+| Restricted keys only       |
++----------------------------+
+          |
+          v
++----------------------------+
+| UFW Firewall (06)          |
++----------------------------+
+          |
+          v
++----------------------------+
+| Optional NAS (07)          |
++----------------------------+
+          |
+          v
++----------------------------+
+| Swarm Init / Join (08)     |
+| First manager logic        |
+| Workers auto join          |
++----------------------------+
+          |
+          v
++----------------------------+
+| Hardening (09)             |
+| Fail2Ban + sysctl tweaks   |
++----------------------------+
+          |
+          v
++----------------------------+
+| Runtime Services (10)      |
+| - Health-check timer       |
+| - Manager-sync timer       |
+| - UFW-sync timer           |
+| - NAS guard                |
++----------------------------+
 ```
 
 ---
 
+## Script Workflow
 
-## ⚡ Quick Start
+| Step | Script               | Description                                                                                          |
+| ---- | -------------------- | ---------------------------------------------------------------------------------------------------- |
+| 1    | `01-config.sh`       | Interactive collection of node role, IPs, admin user, admin IP, NAS info, candidate labels           |
+| 2    | `02-dependencies.sh` | Installs Docker, `jq`, `openssh-client`, containerd, and prepares keyrings                           |
+| 3    | `03-base.sh`         | Sets base directories, system defaults                                                               |
+| 4    | `04-swarm-user.sh`   | Creates `swarmd` user, sets permissions, no-login shell                                              |
+| 5    | `05-ssh.sh`          | Configures SSH keys for `swarmd`, ensures `.ssh` directory exists on remote nodes, restricted access |
+| 6    | `06-ufw.sh`          | Initializes firewall rules for admin + Swarm ports                                                   |
+| 7    | `07-nas.sh`          | Optional NAS setup (integrated with health guards at runtime)                                        |
+| 8    | `08-swarm.sh`        | Initializes Swarm (first manager only), joins workers, sets `nodes.json`                             |
+| 9    | `09-hardening.sh`    | Security hardening (Fail2Ban, sysctl, Docker daemon tweaks)                                          |
+| 10   | `10-runtime.sh`      | Enables systemd timers for health checks, UFW sync, manager-sync, NAS guard                          |
 
-### 1. Download the repo
+> Each step logs to `/var/log/swarm-bootstrap.log` with timestamps and node role context.
+
+---
+
+## Interactive Configuration
+
+* Collects **all variables up front**
+* Avoids storing plain text passwords
+* Prompts include:
+
+  * Node role (`manager` / `worker`)
+  * Node IP / Hostname
+  * Admin user & admin IP (with override)
+  * Candidate label for worker promotion
+  * NAS credentials (stored encrypted locally)
+* Ensures future scripts can run **non-interactively**
+
+---
+
+## Node Registry & UFW Sync
+
+* `nodes.json` stored at `/etc/swarm-bootstrap/nodes.json`
+* Leader-only manager updates this file automatically
+* Syncs with systemd timer every **5 minutes**
+* Ensures firewall rules reflect current swarm nodes
+* Workers are listed explicitly, manager IPs only allow inbound SSH from other managers and admin IP
+* Avoids worker nodes opening unnecessary inbound ports
+
+**Sample `nodes.json`**
+
+```json
+{
+  "managers": ["10.0.0.1", "10.0.0.2", "10.0.0.3"],
+  "workers": ["10.0.0.4", "10.0.0.5", "10.0.0.6", "10.0.0.7", "10.0.0.8"]
+}
+```
+
+---
+
+## Manager Candidate Labels & Promotion Policy
+
+* Workers can be assigned a **candidate label** (e.g., `manager-candidate01`)
+* Only **one node is promoted at a time** if quorum is at risk
+* Prevents race conditions during auto-promotion
+* Candidate labels must be **unique per node**
+* Swarm checks candidate order for safe promotion
+
+---
+
+## Health Checks & Auto-Recovery
+
+* Systemd service `swarm-health.service` monitors nodes
+* Detects failed nodes and automatically re-joins them to the cluster
+* Works in tandem with `swarm-manager-sync.timer` and `swarm-ufw-sync.timer`
+* NAS health guard integrated in runtime
+* Helps maintain cluster stability even if one manager fails
+
+---
+
+## Security Model
+
+* `swarmd` service account:
+
+  * No-login shell
+  * Only handles Docker and SSH automation
+  * Added to `docker` and `ssh` groups
+  * SSH keys restricted (`no-agent-forwarding,no-port-forwarding,no-X11-forwarding,no-pty`)
+  * Only admin IP allowed inbound
+* Admin user retains full SSH access
+* Workers:
+
+  * Outbound SSH allowed for joining / retrieving tokens
+  * Inbound SSH only allowed for admin (optional)
+* Systemd timers run as root or swarmd as needed, following **least privilege** principle
+
+> **Warning:** Swarmd is a privileged automation account — treat SSH keys as sensitive.
+
+---
+
+## Installation / Bootstrap
+
+1. Pull the bootstrap script on each node:
 
 ```bash
-curl -L https://github.com/Browork8567/Docker-Swarm-Bootstrap-Debian/archive/refs/heads/main.tar.gz -o swarm-bootstrap.tar.gz
-tar -xzf swarm-bootstrap.tar.gz
-cd Docker-Swarm-Bootstrap-Debian-main
+curl -fsSL https://raw.githubusercontent.com/Browork8567/Docker-Swarm-Bootstrap-Debian/main/bootstrap.sh -o bootstrap.sh
+chmod +x bootstrap.sh
+sudo ./bootstrap.sh
 ```
 
----
+2. Follow interactive prompts for role, IP, admin, NAS, etc.
 
-### Option B — Download manually
+3. Repeat for all manager nodes first, then worker nodes.
 
-1. Click **Code → Download ZIP**
-2. Extract the archive
-3. Open a terminal in the extracted folder
-
----
-
-### 2. Configure your environment
-
-Edit:
-
-```
-config/config.env
-```
-
-Update values:
-
-```
-MGR1_HOSTNAME="mgr-01.lan"
-MGR1_IP="192.168.1.10"
-
-LAN_SUBNET="192.168.1.0/24"
-ADMIN_IP="192.168.1.50"
-
-NAS_IP="192.168.1.100"
-```
-
----
-
-### 3. Run bootstrap (ALL nodes)
+4. Verify logs:
 
 ```bash
-sudo bash bootstrap.sh
+tail -f /var/log/swarm-bootstrap.log
 ```
 
 ---
 
-### 4. Setup SSH trust
+## Post-Bootstrap Verification
 
-Run on all nodes except primary:
-
-```bash
-ssh-copy-id <user>@mgr-01.lan
-```
-
----
-
-### 5. Start Swarm
-
-On primary node:
-
-```bash
-sudo systemctl start swarm-auto.service
-```
-
-On all other nodes:
-
-```bash
-sudo systemctl start swarm-auto.service
-```
-
----
-
-### 6. Verify
+* Check nodes:
 
 ```bash
 docker node ls
 ```
 
----
-
-## 🧠 Required Environment Setup
-
-### Hostnames
-
-Each node MUST have a unique hostname:
-
-```
-mgr-01
-mgr-02
-mgr-03
-worker-01
-```
-
-Set with:
+* Verify services and timers:
 
 ```bash
-sudo hostnamectl set-hostname mgr-01
+systemctl list-timers
+systemctl status swarm-health.service
+systemctl status swarm-manager-sync.service
+systemctl status swarm-ufw-sync.service
 ```
+
+* Confirm `nodes.json` reflects all nodes
 
 ---
 
-### DNS (REQUIRED)
+## Troubleshooting
 
-You MUST ensure all nodes can resolve the primary manager.
-
-#### Option A — Local DNS (Recommended)
-
-```
-mgr-01.lan → 192.168.1.10
-mgr-02.lan → 192.168.1.11
-mgr-03.lan → 192.168.1.12
-```
+* Node fails to join → check `swarmd` SSH key access
+* Firewall misconfigured → check `swarm-ufw-sync.timer` logs
+* Swarm split → ensure only the first manager ran `docker swarm init`
+* Candidate label conflicts → review `config.json` and logs
+* Logs located at `/var/log/swarm-bootstrap.log` with timestamps
 
 ---
 
-#### Option B — /etc/hosts fallback
+## Optional Improvements
 
-The bootstrap automatically injects:
-
-```
-192.168.1.10 mgr-01.lan mgr-01
-```
-
----
-
-## 🧩 Post Install
-
-Run on each host:
-
-```bash
-ssh-copy-id USER@mgr-01
-sudo systemctl start swarm-auto.service
-docker node ls
-```
+* Remove stale firewall rules automatically
+* Sync worker IPs immediately after join
+* Restrict SSH further based on subnet
+* Enable encrypted transport for `nodes.json` updates
 
 ---
 
-## 🔐 Security Model
+## References
 
-* No plaintext credentials
-* No open LAN firewall
-* SSH restricted to admin IP
-* Fail2Ban enabled (5 attempts → 5-minute ban)
-* Secrets stored in Docker (not in repo)
-* Swarm ports restricted to internal network only
+* [Docker Swarm Mode Documentation](https://docs.docker.com/engine/swarm/)
+* [Swarm Node Management](https://docs.docker.com/engine/swarm/swarm-tutorial/)
+* [Firewall and Security Best Practices](https://computingforgeeks.com/docker-swarm-security-guide/)
 
 ---
 
-## 🧪 Troubleshooting
-
-### Nodes create their own swarm
-
-```bash
-ssh mgr-01.lan
-```
-
-If this fails → fix DNS or SSH.
-
----
-
-### Docker permission denied
-
-```bash
-newgrp docker
-```
-
-OR log out and back in.
-
----
-
-### Swarm service fails
-
-```bash
-journalctl -xeu swarm-auto.service
-```
-
----
-
-### Stuck joining swarm
-
-```bash
-ssh -o BatchMode=yes user@mgr-01.lan docker info
-```
-
----
-
-### SSH permission errors
-
-```bash
-sudo chown -R $USER:$USER ~/.ssh
-chmod 700 ~/.ssh
-chmod 600 ~/.ssh/*
-```
-
----
-
-### NAS issues
-
-```bash
-mount | grep /data
-sudo /usr/local/bin/docker-mount-guard.sh
-```
-
----
-
-## 🧪 Validation & Safety
-
-This repo includes:
-
-* ShellCheck (linting)
-* Gitleaks (secret scanning)
-* Dependabot (dependency updates)
-
----
-
-## 📁 Repository Structure
-
-```
-swarm-secure-bootstrap/
-│
-├── README.md
-├── bootstrap.sh
-│
-├── config/
-│   └── config.env.example
-│
-├── scripts/
-│   ├── 01-base.sh
-│   ├── 02-docker.sh
-│   ├── 03-ssh.sh
-│   ├── 04-ufw.sh
-│   ├── 05-nas.sh
-│   ├── 06-nas-guard.sh
-│   ├── 07-swarm.sh
-│   ├── 08-hardening.sh
-│   └── fail2ban.local
-│
-├── systemd/
-│   ├── docker-mount-guard.service
-│   ├── docker-mount-guard.timer
-│   └── swarm-auto.service
-│
-├── portainer/
-│   └── stack.yml
-│
-├── secrets/
-│   └── README.md
-│
-└── .github/
-    └── workflows/
-        ├── ci.yml
-        ├── security.yml
-        └── release.yml
-```
-
----
 
 ## ❤️ Contributing
 
