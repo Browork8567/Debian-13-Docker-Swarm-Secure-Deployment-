@@ -83,7 +83,7 @@ This repository provides a modular set of scripts to:
 
 ## Architecture
 
-```
+```text
 +----------------------------+
 |      Bootstrap Script      |
 +----------------------------+
@@ -101,14 +101,14 @@ This repository provides a modular set of scripts to:
           |
           v
 +----------------------------+
-| Base / Users (03-04)       |
-| swarmd user & directories  |
+| Swarmd Account (04)        |
+| No-login shell, docker grp |
 +----------------------------+
           |
           v
 +----------------------------+
 | SSH Trust (05)             |
-| Restricted keys only       |
+| Restricted keys            |
 +----------------------------+
           |
           v
@@ -148,18 +148,17 @@ This repository provides a modular set of scripts to:
 
 ## Script Workflow
 
-| Step | Script               | Description                                                                                          |
-| ---- | -------------------- | ---------------------------------------------------------------------------------------------------- |
-| 1    | `01-config.sh`       | Interactive collection of node role, IPs, admin user, admin IP, NAS info, candidate labels           |
-| 2    | `02-dependencies.sh` | Installs Docker, `jq`, `openssh-client`, containerd, and prepares keyrings                           |
-| 3    | `03-base.sh`         | Sets base directories, system defaults                                                               |
-| 4    | `04-swarm-user.sh`   | Creates `swarmd` user, sets permissions, no-login shell                                              |
-| 5    | `05-ssh.sh`          | Configures SSH keys for `swarmd`, ensures `.ssh` directory exists on remote nodes, restricted access |
-| 6    | `06-ufw.sh`          | Initializes firewall rules for admin + Swarm ports                                                   |
-| 7    | `07-nas.sh`          | Optional NAS setup (integrated with health guards at runtime)                                        |
-| 8    | `08-swarm.sh`        | Initializes Swarm (first manager only), joins workers, sets `nodes.json`                             |
-| 9    | `09-hardening.sh`    | Security hardening (Fail2Ban, sysctl, Docker daemon tweaks)                                          |
-| 10   | `10-runtime.sh`      | Enables systemd timers for health checks, UFW sync, manager-sync, NAS guard                          |
+| Step | Script               | Description                                                                                                    |
+| ---- | -------------------- | -------------------------------------------------------------------------------------------------------------- |
+| 1    | `01-config.sh`       | Interactive collection of node role, IPs, admin user, admin IP, NAS info, candidate labels                     |
+| 2    | `02-dependencies.sh` | Installs Docker, `jq`, `openssh-client`, containerd, and base system prep (merged from previous `base` script) |
+| 3    | `04-swarm-user.sh`   | Creates `swarmd` user, sets permissions, no-login shell                                                        |
+| 4    | `05-ssh.sh`          | Configures SSH keys for `swarmd`, ensures `.ssh` directory exists on remote nodes, restricted access           |
+| 5    | `06-ufw.sh`          | Initializes firewall rules for admin + Swarm ports                                                             |
+| 6    | `07-nas.sh`          | Optional NAS setup (integrated with health guards at runtime)                                                  |
+| 7    | `08-swarm.sh`        | Initializes Swarm (first manager only), joins workers, sets `nodes.json`                                       |
+| 8    | `09-hardening.sh`    | Security hardening (Fail2Ban, sysctl, Docker daemon tweaks)                                                    |
+| 9    | `10-runtime.sh`      | Enables systemd timers for health checks, UFW sync, manager-sync, NAS guard                                    |
 
 > Each step logs to `/var/log/swarm-bootstrap.log` with timestamps and node role context.
 
@@ -288,7 +287,7 @@ systemctl status swarm-ufw-sync.service
 * Node fails to join → check `swarmd` SSH key access
 * Firewall misconfigured → check `swarm-ufw-sync.timer` logs
 * Swarm split → ensure only the first manager ran `docker swarm init`
-* Candidate label conflicts → review `config.json` and logs
+* Candidate label conflicts → review logs
 * Logs located at `/var/log/swarm-bootstrap.log` with timestamps
 
 ---
@@ -299,6 +298,47 @@ systemctl status swarm-ufw-sync.service
 * Sync worker IPs immediately after join
 * Restrict SSH further based on subnet
 * Enable encrypted transport for `nodes.json` updates
+
+---
+
+## Systemd Units Directory — Expected Files
+
+### Health & Recovery
+
+```
+swarm-health.service
+swarm-health.timer
+```
+
+### Manager Sync (nodes.json registry)
+
+```
+swarm-manager-sync.service
+swarm-manager-sync.timer
+```
+
+### UFW Firewall Sync
+
+```
+swarm-ufw-sync.service
+swarm-ufw-sync.timer
+```
+
+### Swarm Auto Join
+
+```
+swarm-auto.service
+```
+
+### NAS Support (optional)
+
+```
+docker-mount-guard.service
+docker-mount-guard.timer
+```
+
+---
+
 
 ---
 
