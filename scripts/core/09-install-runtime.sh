@@ -15,6 +15,9 @@ systemctl daemon-reload
 systemctl enable swarm-health.timer
 systemctl enable swarm-manager-sync.timer
 
+systemctl enable docker-mount-guard.timer
+systemctl start docker-mount-guard.timer
+
 systemctl start swarm-health.timer
 systemctl start swarm-manager-sync.timer
 
