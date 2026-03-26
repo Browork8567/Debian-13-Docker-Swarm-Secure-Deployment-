@@ -347,7 +347,12 @@ Useful for:
 Run on each node:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Browork8567/Docker-Swarm-Bootstrap-Debian/main/bootstrap.sh -o bootstrap.sh
+sudo apt-get update && sudo apt-get install -y git
+
+git clone https://github.com/Browork8567/Docker-Swarm-Bootstrap-Debian.git
+
+cd Docker-Swarm-Bootstrap-Debian
+
 chmod +x bootstrap.sh
 sudo ./bootstrap.sh
 ```
