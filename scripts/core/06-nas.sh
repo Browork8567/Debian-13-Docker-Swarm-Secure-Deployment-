@@ -9,12 +9,14 @@ if [[ ! -f "$CONFIG" ]]; then
     exit 0
 fi
 
-echo "[07] Mounting NAS (optional)..."
+echo "[06] Mounting NAS (optional)..."
 
 # Load config
 NAS_IP=$(jq -r .nas_ip "$CONFIG")
 NAS_SHARE_NAME=$(jq -r .nas_share "$CONFIG")
 NAS_PATH=$(jq -r .nas_path "$CONFIG")
+NAS_UID=$(jq -r .nas_uid "$CONFIG")
+NAS_GID=$(jq -r .nas_gid "$CONFIG")
 
 # Skip if not configured
 if [[ "$NAS_IP" == "null" || -z "$NAS_IP" ]]; then
@@ -28,14 +30,16 @@ if [[ ! -f "$CRED_FILE" ]]; then
     exit 0
 fi
 
-# Build share path (IP-based, no DNS)
+# Build share path (IP-based)
 NAS_SHARE="//${NAS_IP}/${NAS_SHARE_NAME}"
 
 # Create mount point
 mkdir -p "$NAS_PATH"
 
-# fstab entry
-FSTAB_ENTRY="${NAS_SHARE} ${NAS_PATH} cifs credentials=${CRED_FILE},_netdev,iocharset=utf8 0 0"
+# Mount options (safe + stable)
+MOUNT_OPTS="credentials=${CRED_FILE},_netdev,iocharset=utf8,uid=${NAS_UID},gid=${NAS_GID},nofail,x-systemd.automount,x-systemd.device-timeout=10"
+
+FSTAB_ENTRY="${NAS_SHARE} ${NAS_PATH} cifs ${MOUNT_OPTS} 0 0"
 
 # Add to fstab if not already present
 if ! grep -q "$NAS_SHARE" /etc/fstab; then
@@ -52,4 +56,4 @@ else
     echo "[WARN] NAS mount failed (continuing)"
 fi
 
-echo "[07] NAS step complete (non-blocking)."
+echo "[06] NAS step complete (non-blocking)."

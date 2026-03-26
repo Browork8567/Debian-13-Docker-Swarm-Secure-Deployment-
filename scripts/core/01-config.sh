@@ -29,6 +29,8 @@ NAS_SHARE=null
 NAS_PATH=null
 NAS_USER=null
 NAS_PASS=null
+NAS_UID=null
+NAS_GID=null
 
 if [[ "$NAS_ENABLE" =~ ^[Yy]$ ]]; then
     read -rp "Enter NAS IP address: " NAS_IP
@@ -37,6 +39,10 @@ if [[ "$NAS_ENABLE" =~ ^[Yy]$ ]]; then
     read -rp "Enter NAS username (service account recommended): " NAS_USER
     read -rsp "Enter NAS password: " NAS_PASS
     echo
+
+    echo "[INFO] Configure UID/GID for container compatibility"
+    read -rp "Enter UID (e.g. 1000): " NAS_UID
+    read -rp "Enter GID (e.g. 1000): " NAS_GID
 fi
 
 if [[ "$NAS_ENABLE" =~ ^[Yy]$ ]]; then
@@ -54,15 +60,17 @@ fi
 
 cat > "$CONFIG_FILE" <<EOF
 {
-  "role": "$ROLE",
-  "node_ip": "$NODE_IP",
-  "admin_user": "$ADMIN_USER",
-  "admin_ip": "$ADMIN_IP",
-  "is_primary_manager": $IS_PRIMARY_MANAGER,
-  "nas_ip": "$NAS_IP",
-  "nas_share": "$NAS_SHARE",
-  "nas_path": "$NAS_PATH",
-  "nas_user": "$NAS_USER"
+  "role": "manager",
+  "node_ip": "192.168.69.10",
+  "admin_user": "base",
+  "admin_ip": "192.168.68.69",
+  "is_primary_manager": true,
+  "nas_ip": null,
+  "nas_share": null,
+  "nas_path": null,
+  "nas_user": null,
+  "nas_uid": null,
+  "nas_gid": null
 }
 
 echo "[INFO] Configuration saved to $CONFIG_FILE"
