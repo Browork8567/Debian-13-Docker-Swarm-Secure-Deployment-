@@ -22,13 +22,28 @@ if [[ "$ROLE" == "manager" ]]; then
     fi
 fi
 
+read -rp "Do you want to configure NAS storage? (y/n): " NAS_ENABLE
+
+NAS_IP=null
+NAS_PATH=null
+NAS_USER=null
+
+if [[ "$NAS_ENABLE" =~ ^[Yy]$ ]]; then
+    read -rp "Enter NAS IP address: " NAS_IP
+    read -rp "Enter NAS mount path (e.g. /mnt/storage): " NAS_PATH
+    read -rp "Enter NAS username: " NAS_USER
+fi
+
 cat > "$CONFIG_FILE" <<EOF
 {
   "role": "$ROLE",
   "node_ip": "$NODE_IP",
   "admin_user": "$ADMIN_USER",
   "admin_ip": "$ADMIN_IP",
-  "is_primary_manager": $IS_PRIMARY_MANAGER
+  "is_primary_manager": $IS_PRIMARY_MANAGER,
+  "nas_ip": "$NAS_IP",
+  "nas_path": "$NAS_PATH",
+  "nas_user": "$NAS_USER"
 }
 EOF
 

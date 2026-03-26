@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-source /opt/swarm-secure/config.env
+CONFIG="/etc/swarm-bootstrap/config.json"
+
+if [[ ! -f "$CONFIG" ]]; then
+    echo "[WARN] Config file not found, skipping NAS setup"
+    exit 0
+fi
 
 echo "[05] Mounting NAS (optional)..."
 
