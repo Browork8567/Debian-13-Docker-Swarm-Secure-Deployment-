@@ -1,81 +1,74 @@
-#!/bin/bash
-set -e
+#!/usr/bin/env bash
+set -euo pipefail
 
-echo "[INFO] Configuring Docker Swarm..."
+CONFIG="/etc/swarm-bootstrap/config.json"
+CRED_FILE="/root/.nas-cred"
 
-# Wait for Docker
-until docker info >/dev/null 2>&1; do
-    echo "[INFO] Waiting for Docker..."
-    sleep 2
-done
-
-ROLE=$(jq -r .role /etc/swarm-bootstrap/config.json)
-NODE_IP=$(jq -r .node_ip /etc/swarm-bootstrap/config.json)
-IS_PRIMARY=$(jq -r .is_primary_manager /etc/swarm-bootstrap/config.json)
-
-# Load manager list safely
-if [[ -f /etc/swarm-bootstrap/nodes.json ]]; then
-    PRIMARY_MANAGER=$(jq -r '.managers[0]' /etc/swarm-bootstrap/nodes.json)
-else
-    PRIMARY_MANAGER="$NODE_IP"
+if [[ ! -f "$CONFIG" ]]; then
+    echo "[WARN] Config file not found, skipping NAS setup"
+    exit 0
 fi
 
-if [[ "$ROLE" == "manager" ]]; then
+echo "[06] Mounting NAS (optional)..."
 
-    if ! docker info | grep -q "Swarm: active"; then
+# Load config
+NAS_IP=$(jq -r .nas_ip "$CONFIG")
+NAS_SHARE_NAME=$(jq -r .nas_share "$CONFIG")
+NAS_PATH=$(jq -r .nas_path "$CONFIG")
+NAS_UID=$(jq -r .nas_uid "$CONFIG")
+NAS_GID=$(jq -r .nas_gid "$CONFIG")
 
-        if [[ "$IS_PRIMARY" == "true" ]]; then
-            echo "[INFO] Initializing swarm as PRIMARY manager..."
-
-            docker swarm init --advertise-addr "$NODE_IP"
-
-            mkdir -p /etc/swarm-bootstrap
-            cat > /etc/swarm-bootstrap/nodes.json <<EOF
-{
-  "managers": ["$NODE_IP"],
-  "workers": []
-}
-EOF
-
-        else
-            echo "[INFO] Joining existing swarm as manager..."
-
-            for i in {1..5}; do
-                TOKEN=$(ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no "$PRIMARY_MANAGER" \
-                    "docker swarm join-token -q manager") && break
-                sleep 3
-            done
-
-            docker swarm join --token "$TOKEN" "$PRIMARY_MANAGER:2377" || {
-                echo "[ERROR] Manager failed to join swarm"
-                exit 1
-            }
-
-            docker info | grep -q "Swarm: active" || {
-                echo "[ERROR] Manager join validation failed"
-                exit 1
-            }
-        fi
-    fi
-
-else
-    echo "[INFO] Joining swarm as worker..."
-
-    for i in {1..5}; do
-        TOKEN=$(ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no "$PRIMARY_MANAGER" \
-            "docker swarm join-token -q worker") && break
-        sleep 3
-    done
-
-    docker swarm join --token "$TOKEN" "$PRIMARY_MANAGER:2377" || {
-        echo "[ERROR] Worker failed to join swarm"
-        exit 1
-    }
-
-    docker info | grep -q "Swarm: active" || {
-        echo "[ERROR] Worker join validation failed"
-        exit 1
-    }
+# Skip if NAS not configured
+if [[ "$NAS_IP" == "null" || -z "$NAS_IP" ]]; then
+    echo "[INFO] NAS not configured, skipping..."
+    exit 0
 fi
 
-echo "[INFO] Swarm configuration complete."
+# Validate required fields
+if [[ "$NAS_SHARE_NAME" == "null" || -z "$NAS_SHARE_NAME" ]]; then
+    echo "[WARN] NAS share missing, skipping"
+    exit 0
+fi
+
+if [[ "$NAS_PATH" == "null" || -z "$NAS_PATH" ]]; then
+    echo "[WARN] NAS path missing, skipping"
+    exit 0
+fi
+
+# Validate credentials file
+if [[ ! -f "$CRED_FILE" ]]; then
+    echo "[WARN] Credentials file not found, skipping mount"
+    exit 0
+fi
+
+# Safe defaults for UID/GID
+NAS_UID=${NAS_UID:-1000}
+NAS_GID=${NAS_GID:-1000}
+
+# Build share path (IP-based, no DNS dependency)
+NAS_SHARE="//${NAS_IP}/${NAS_SHARE_NAME}"
+
+# Ensure mount point exists (extra safety even though config creates it)
+mkdir -p "$NAS_PATH"
+
+# Mount options (resilient + container-friendly)
+MOUNT_OPTS="credentials=${CRED_FILE},_netdev,iocharset=utf8,uid=${NAS_UID},gid=${NAS_GID},nofail,x-systemd.automount,x-systemd.device-timeout=10"
+
+FSTAB_ENTRY="${NAS_SHARE} ${NAS_PATH} cifs ${MOUNT_OPTS} 0 0"
+
+# Add to fstab if not already present
+if ! grep -q "$NAS_SHARE" /etc/fstab; then
+    echo "[INFO] Adding NAS mount to /etc/fstab"
+    echo "$FSTAB_ENTRY" >> /etc/fstab
+else
+    echo "[INFO] NAS already present in /etc/fstab"
+fi
+
+# Attempt mount (non-blocking)
+if mount -a; then
+    echo "[INFO] NAS mounted successfully"
+else
+    echo "[WARN] NAS mount failed (continuing)"
+fi
+
+echo "[06] NAS step complete (non-blocking)."

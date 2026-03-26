@@ -1,25 +1,29 @@
-#!/bin/bash
-set -e
+#!/usr/bin/env bash
+set -euo pipefail
 
 echo "[INFO] Running manager sync..."
 
-# Only run on leader
-IS_LEADER=$(docker node ls 2>/dev/null | grep Leader || true)
+# Ensure docker is available
+if ! docker info >/dev/null 2>&1; then
+    echo "[WARN] Docker not available, skipping"
+    exit 0
+fi
 
-if [[ -z "$IS_LEADER" ]]; then
+# Only run on leader
+if ! docker node ls 2>/dev/null | grep -q Leader; then
     echo "[INFO] Not leader, skipping..."
     exit 0
 fi
 
-MANAGERS=$(docker node ls --format '{{.Hostname}} {{.Status}} {{.ManagerStatus}}' | \
-    awk '$3 ~ /Leader|Reachable/ {print $1}')
+# Use node IPs (not hostnames)
+MANAGERS=$(docker node inspect $(docker node ls --filter role=manager -q) \
+    --format '{{ .Status.Addr }}')
 
-WORKERS=$(docker node ls --format '{{.Hostname}} {{.Status}} {{.ManagerStatus}}' | \
-    awk '$3 == "" {print $1}')
+WORKERS=$(docker node inspect $(docker node ls --filter role=worker -q) \
+    --format '{{ .Status.Addr }}')
 
-MANAGER_COUNT=$(echo "$MANAGERS" | wc -l)
+MANAGER_COUNT=$(echo "$MANAGERS" | grep -c . || true)
 
-# ✅ MEDIUM FIX 6 — CORRECT PLACEMENT
 if [[ "$MANAGER_COUNT" -lt 1 ]]; then
     echo "[WARN] No managers detected, skipping sync"
     exit 0
@@ -27,7 +31,6 @@ fi
 
 mkdir -p /etc/swarm-bootstrap
 
-# Build JSON arrays
 MANAGER_JSON=$(printf '%s\n' $MANAGERS | jq -R . | jq -s .)
 WORKER_JSON=$(printf '%s\n' $WORKERS | jq -R . | jq -s .)
 

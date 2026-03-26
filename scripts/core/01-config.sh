@@ -102,5 +102,13 @@ if ! jq empty "$CONFIG_FILE" >/dev/null 2>&1; then
     cat "$CONFIG_FILE"
     exit 1
 fi
+# -------------------------------
+# Generate nas mount point
+# -------------------------------
+
+if [[ -n "$NAS_PATH" ]]; then
+    echo "[INFO] Creating mount directory $NAS_PATH"
+    mkdir -p "$NAS_PATH"
+fi
 
 echo "[INFO] Configuration saved to $CONFIG_FILE"
