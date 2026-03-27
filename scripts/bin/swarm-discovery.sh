@@ -1,57 +1,106 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -euo pipefail
 
 CONFIG="/etc/swarm-bootstrap/config.json"
-NODES="/etc/swarm-bootstrap/nodes.json"
 
-PRIMARY=$(jq -r .primary_manager_ip "$CONFIG")
-SELF=$(jq -r .node_ip "$CONFIG")
+BOOTSTRAP_USER=$(jq -r .bootstrap_user "$CONFIG")
+BOOTSTRAP_PASS=$(jq -r .bootstrap_pass "$CONFIG")
+PRIMARY_MANAGER=$(jq -r .primary_manager_ip "$CONFIG")
+MANAGER_RANGE=$(jq -r '.manager_range[]' "$CONFIG")
+WORKER_RANGE=$(jq -r '.worker_range[]' "$CONFIG")
 
-# Only leader runs
-if [[ "$SELF" != "$PRIMARY" ]]; then
-    exit 0
-fi
+SSH_OPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5"
 
-BOOT_USER=$(jq -r .bootstrap_user "$CONFIG")
-BOOT_PASS=$(jq -r .bootstrap_password "$CONFIG")
+echo "[INFO] Starting swarm discovery..."
 
-expand_range() {
-    START=$(echo $1 | cut -d'-' -f1 | awk -F. '{print $4}')
-    END=$(echo $1 | cut -d'-' -f2 | awk -F. '{print $4}')
-    BASE=$(echo $1 | cut -d'-' -f1 | awk -F. '{print $1"."$2"."$3}')
-    for i in $(seq $START $END); do
-        echo "$BASE.$i"
-    done
-}
+for NODE in $MANAGER_RANGE $WORKER_RANGE; do
+    echo "[INFO] Checking node $NODE..."
 
-ALL_IPS=$(expand_range "$(jq -r .manager_range "$CONFIG")")
-ALL_IPS+=" $(expand_range "$(jq -r .worker_range "$CONFIG") )"
-
-for IP in $ALL_IPS; do
-    [[ "$IP" == "$SELF" ]] && continue
-
-    ping -c1 -W1 "$IP" >/dev/null 2>&1 || continue
-
-    if grep -q "$IP" "$NODES" 2>/dev/null; then
+    # Skip self
+    if [[ "$NODE" == "$PRIMARY_MANAGER" ]]; then
         continue
     fi
 
-    echo "[INFO] Found new node: $IP"
+    # Test bootstrap SSH access
+    if ! sshpass -p "$BOOTSTRAP_PASS" ssh $SSH_OPTS "$BOOTSTRAP_USER@$NODE" "echo ok" >/dev/null 2>&1; then
+        echo "[INFO] Node $NODE not ready or unreachable"
+        continue
+    fi
 
-    sshpass -p "$BOOT_PASS" ssh -o StrictHostKeyChecking=no "$BOOT_USER@$IP" "
-        useradd -m -s /bin/bash swarmd || true
-        mkdir -p /home/swarmd/.ssh
-        echo '$(cat /home/swarmd/.ssh/id_rsa.pub)' >> /home/swarmd/.ssh/authorized_keys
-        chown -R swarmd:swarmd /home/swarmd/.ssh
-        chmod 700 /home/swarmd/.ssh
-        chmod 600 /home/swarmd/.ssh/authorized_keys
-    "
+    echo "[INFO] Node $NODE reachable. Provisioning..."
 
-    TOKEN=$(docker swarm join-token -q worker)
+    # -------------------------------
+    # CREATE swarmd USER + GROUP (IDEMPOTENT)
+    # -------------------------------
+    sshpass -p "$BOOTSTRAP_PASS" ssh $SSH_OPTS "$BOOTSTRAP_USER@$NODE" bash -s <<'EOF'
+set -e
 
-    ssh -i /home/swarmd/.ssh/id_rsa -o StrictHostKeyChecking=no swarmd@$IP \
-        "docker swarm join --token $TOKEN $PRIMARY:2377"
+# Create group if missing
+if getent group swarmd >/dev/null; then
+    echo "[INFO] swarmd group exists"
+else
+    groupadd swarmd
+    echo "[INFO] swarmd group created"
+fi
 
-    jq --arg ip "$IP" '.workers += [$ip]' "$NODES" > tmp && mv tmp "$NODES"
+# Create user if missing
+if id -u swarmd >/dev/null 2>&1; then
+    echo "[INFO] swarmd user exists"
+else
+    useradd -r -m -d /home/swarmd -s /usr/sbin/nologin -g swarmd swarmd
+    echo "[INFO] swarmd user created"
+fi
 
+# Ensure docker group membership
+if getent group docker >/dev/null; then
+    usermod -aG docker swarmd || true
+fi
+
+# Ensure SSH directory
+mkdir -p /home/swarmd/.ssh
+chown -R swarmd:swarmd /home/swarmd
+chmod 700 /home/swarmd/.ssh
+EOF
+
+    # -------------------------------
+    # PUSH SSH KEY (IDEMPOTENT)
+    # -------------------------------
+    PUB_KEY=$(cat /home/swarmd/.ssh/id_rsa.pub)
+
+    sshpass -p "$BOOTSTRAP_PASS" ssh $SSH_OPTS "$BOOTSTRAP_USER@$NODE" \
+        "grep -qxF '$PUB_KEY' /home/swarmd/.ssh/authorized_keys 2>/dev/null || \
+         echo '$PUB_KEY' >> /home/swarmd/.ssh/authorized_keys && \
+         chown swarmd:swarmd /home/swarmd/.ssh/authorized_keys && \
+         chmod 600 /home/swarmd/.ssh/authorized_keys"
+
+    # -------------------------------
+    # DETERMINE ROLE BY IP RANGE
+    # -------------------------------
+    ROLE="worker"
+    for MGR in $MANAGER_RANGE; do
+        if [[ "$NODE" == "$MGR" ]]; then
+            ROLE="manager"
+        fi
+    done
+
+    echo "[INFO] Assigning role $ROLE to $NODE"
+
+    # -------------------------------
+    # JOIN SWARM
+    # -------------------------------
+    TOKEN=$(sudo -u swarmd ssh $SSH_OPTS "swarmd@$PRIMARY_MANAGER" \
+        "docker swarm join-token -q $ROLE")
+
+    sshpass -p "$BOOTSTRAP_PASS" ssh $SSH_OPTS "$BOOTSTRAP_USER@$NODE" \
+        "docker swarm join --token $TOKEN $PRIMARY_MANAGER:2377" || true
+
+    # -------------------------------
+    # CLEANUP BOOTSTRAP USER
+    # -------------------------------
+    sshpass -p "$BOOTSTRAP_PASS" ssh $SSH_OPTS "$BOOTSTRAP_USER@$NODE" \
+        "userdel -r $BOOTSTRAP_USER || true"
+
+    echo "[INFO] Node $NODE processed"
 done
+
+echo "[INFO] Swarm discovery complete"

@@ -81,7 +81,6 @@ echo "[INFO] swarmd account ready"
 # Boostrap temp user
 # -------------------------------
 
-# ADD THIS BLOCK
 
 BOOTSTRAP_USER=$(jq -r .bootstrap_user /etc/swarm-bootstrap/config.json)
 BOOTSTRAP_PASS=$(jq -r .bootstrap_password /etc/swarm-bootstrap/config.json)
