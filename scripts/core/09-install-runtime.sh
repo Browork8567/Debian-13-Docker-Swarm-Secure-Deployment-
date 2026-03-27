@@ -1,65 +1,101 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -euo pipefail
 
 echo "[INFO] Setting up runtime services..."
 
-# Paths
-SYSTEMD_DIR="/etc/systemd/system"
-BIN_DIR="/usr/local/bin"
-REPO_DIR="$(dirname "$0")/../../systemd"   # systemd unit files in repo root
-BIN_REPO_DIR="$(dirname "$0")/../bin"      # runtime scripts in repo under scripts/bin
+SYSTEMD_DEST="/etc/systemd/system"
+BIN_DEST="/usr/local/bin"
+CONFIG="/etc/swarm-bootstrap/config.json"
 
-# List of systemd units
-SERVICES=(
-    swarm-health.service
-    swarm-health.timer
-    swarm-manager-sync.service
-    swarm-manager-sync.timer
-    swarm-ufw-sync.service
-    swarm-ufw-sync.timer
-)
+SCRIPT_SOURCE_DIR="./scripts/bin"
+SYSTEMD_SOURCE_DIR="./systemd"
 
-# Copy systemd unit files
-echo "[INFO] Copying systemd unit files..."
-for svc in "${SERVICES[@]}"; do
-    if [[ -f "$REPO_DIR/$svc" ]]; then
-        cp "$REPO_DIR/$svc" "$SYSTEMD_DIR/"
-        echo "[INFO] Copied $svc to $SYSTEMD_DIR"
-    else
-        echo "[WARN] Missing $svc in repo folder $REPO_DIR"
-    fi
-done
+# -------------------------------
+# VALIDATE CONFIG
+# -------------------------------
+if [[ ! -f "$CONFIG" ]]; then
+    echo "[ERROR] Missing config.json"
+    exit 1
+fi
 
-# Copy runtime scripts (excluding docker-mount-guard.sh)
-RUNTIME_SCRIPTS=(
-    swarm-health.sh
-    swarm-manager-sync.sh
-    swarm-ufw-sync.sh
-)
+IS_PRIMARY=$(jq -r .is_primary_manager "$CONFIG")
 
+# -------------------------------
+# INSTALL RUNTIME SCRIPTS
+# -------------------------------
 echo "[INFO] Installing runtime scripts..."
+
+RUNTIME_SCRIPTS=(
+swarm-health.sh
+swarm-manager-sync.sh
+swarm-ufw-sync.sh
+swarm-discovery.sh
+)
+
 for script in "${RUNTIME_SCRIPTS[@]}"; do
-    if [[ -f "$BIN_REPO_DIR/$script" ]]; then
-        cp "$BIN_REPO_DIR/$script" "$BIN_DIR/"
-        chmod +x "$BIN_DIR/$script"
-        echo "[INFO] Installed $script to $BIN_DIR"
+    if [[ -f "$SCRIPT_SOURCE_DIR/$script" ]]; then
+        install -m 755 "$SCRIPT_SOURCE_DIR/$script" "$BIN_DEST/$script"
+        echo "[INFO] Installed $script"
     else
-        echo "[WARN] Missing runtime script $script in repo folder $BIN_REPO_DIR"
+        echo "[WARN] Missing $script"
     fi
 done
 
-# Reload systemd daemon
-echo "[INFO] Reloading systemd daemon..."
+# -------------------------------
+# COPY SYSTEMD UNITS
+# -------------------------------
+echo "[INFO] Copying systemd unit files..."
+
+SYSTEMD_UNITS=(
+swarm-health.service
+swarm-health.timer
+swarm-manager-sync.service
+swarm-manager-sync.timer
+swarm-ufw-sync.service
+swarm-ufw-sync.timer
+swarm-discovery.service
+swarm-discovery.timer
+)
+
+for unit in "${SYSTEMD_UNITS[@]}"; do
+    if [[ -f "$SYSTEMD_SOURCE_DIR/$unit" ]]; then
+        cp "$SYSTEMD_SOURCE_DIR/$unit" "$SYSTEMD_DEST/"
+        echo "[INFO] Copied $unit"
+    else
+        echo "[WARN] Missing $unit"
+    fi
+done
+
+# -------------------------------
+# RELOAD SYSTEMD
+# -------------------------------
+echo "[INFO] Reloading systemd..."
 systemctl daemon-reexec
 systemctl daemon-reload
 
-# Enable and start timers/services
+# -------------------------------
+# ENABLE BASE TIMERS (ALL NODES)
+# -------------------------------
+BASE_TIMERS=(
+swarm-health.timer
+swarm-manager-sync.timer
+swarm-ufw-sync.timer
+)
 
-if [[ "$svc" == *.timer ]]; then
-    systemctl enable --now "$svc"
-    echo "[INFO] Enabled and started $svc"
+for timer in "${BASE_TIMERS[@]}"; do
+    systemctl enable --now "$timer"
+    echo "[INFO] Enabled $timer"
+done
+
+# -------------------------------
+# ENABLE DISCOVERY (LEADER ONLY)
+# -------------------------------
+if [[ "$IS_PRIMARY" == "true" ]]; then
+    echo "[INFO] Enabling swarm discovery (leader only)..."
+    systemctl enable --now swarm-discovery.timer
+    echo "[INFO] swarm-discovery.timer enabled"
 else
-    echo "[INFO] Skipping enable for $svc (service triggered by timer)"
+    echo "[INFO] Not primary manager, skipping discovery service"
 fi
 
-echo "[INFO] Runtime services configured successfully."
+echo "[INFO] Runtime services configured."
