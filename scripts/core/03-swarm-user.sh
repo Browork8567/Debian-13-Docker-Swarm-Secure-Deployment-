@@ -19,13 +19,8 @@ PRIMARY_IP=$(jq -r .primary_manager_ip "$CONFIG")
 BOOTSTRAP_USER=$(jq -r .bootstrap_user "$CONFIG")
 BOOTSTRAP_PASS=$(jq -r .bootstrap_password "$CONFIG")
 
-if [[ "$BOOTSTRAP_USER" == "null" || -z "$BOOTSTRAP_USER" ]]; then
-    echo "[WARN] No bootstrap user defined, skipping bootstrap setup"
-    exit 0
-fi
-
 # -------------------------------
-# CREATE USER (idempotent)
+# CREATE SWARMD USER (ALWAYS)
 # -------------------------------
 if id -u swarmd >/dev/null 2>&1; then
     echo "[INFO] swarmd user already exists"
@@ -73,7 +68,7 @@ if [[ "$CURRENT_IP" == "$PRIMARY_IP" ]]; then
     chmod 644 "$SSH_DIR/id_rsa.pub"
     chown swarmd:swarmd "$SSH_DIR/id_rsa" "$SSH_DIR/id_rsa.pub"
 else
-    echo "[INFO] Non-leader node — skipping SSH key generation (leader will distribute)"
+    echo "[INFO] Non-leader node — skipping SSH key generation"
 fi
 
 # -------------------------------
@@ -85,13 +80,13 @@ chmod 600 "$AUTHORIZED_KEYS"
 chown swarmd:swarmd "$AUTHORIZED_KEYS"
 
 # -------------------------------
-# ADD TO DOCKER GROUP
+# OPTIONAL: DOCKER ACCESS
 # -------------------------------
 if getent group docker >/dev/null; then
     usermod -aG docker swarmd
     echo "[INFO] swarmd added to docker group"
 else
-    echo "[WARN] docker group not found (Docker not installed yet?)"
+    echo "[WARN] docker group not found"
 fi
 
 # -------------------------------
@@ -102,32 +97,41 @@ echo "[INFO] Validating swarmd docker access..."
 if sudo -u swarmd docker info >/dev/null 2>&1; then
     echo "[INFO] swarmd can access docker"
 else
-    echo "[WARN] swarmd cannot access docker yet (expected until session refresh)"
+    echo "[WARN] swarmd docker access pending (normal until session refresh)"
 fi
 
 echo "[INFO] swarmd account ready"
 
 # =========================================================
-# BOOTSTRAP USER (TEMP ACCESS USER)
+# BOOTSTRAP USER (NON-LEADER ONLY)
 # =========================================================
+if [[ "$CURRENT_IP" != "$PRIMARY_IP" ]]; then
 
-if id -u "$BOOTSTRAP_USER" >/dev/null 2>&1; then
-    echo "[INFO] Bootstrap user already exists"
+    if [[ "$BOOTSTRAP_USER" == "null" || -z "$BOOTSTRAP_USER" ]]; then
+        echo "[WARN] No bootstrap user defined, skipping bootstrap setup"
+    else
+        if id -u "$BOOTSTRAP_USER" >/dev/null 2>&1; then
+            echo "[INFO] Bootstrap user already exists"
+        else
+            echo "[INFO] Creating bootstrap user..."
+
+            useradd -m -s /bin/bash "$BOOTSTRAP_USER"
+            echo "$BOOTSTRAP_USER:$BOOTSTRAP_PASS" | chpasswd
+
+            # 🔐 LOCKED DOWN SUDO (ONLY node init)
+            echo "$BOOTSTRAP_USER ALL=(ALL) NOPASSWD: /usr/local/bin/swarm-node-init.sh" > "/etc/sudoers.d/$BOOTSTRAP_USER"
+            chmod 440 "/etc/sudoers.d/$BOOTSTRAP_USER"
+
+            echo "[INFO] Bootstrap user created with restricted sudo"
+        fi
+    fi
+
 else
-    echo "[INFO] Creating bootstrap user..."
-
-    useradd -m -s /bin/bash "$BOOTSTRAP_USER"
-    echo "$BOOTSTRAP_USER:$BOOTSTRAP_PASS" | chpasswd
-
-    # 🔐 Restricted sudo (ONLY node init script)
-    echo "$BOOTSTRAP_USER ALL=(ALL) NOPASSWD: /usr/local/bin/swarm-node-init.sh" > "/etc/sudoers.d/$BOOTSTRAP_USER"
-    chmod 440 "/etc/sudoers.d/$BOOTSTRAP_USER"
-
-    echo "[INFO] Bootstrap user created with restricted sudo"
+    echo "[INFO] Leader node — skipping bootstrap user creation"
 fi
 
 # =========================================================
-# HARDEN NODE INIT SCRIPT (ROOT CONTROLLED)
+# HARDEN NODE INIT SCRIPT
 # =========================================================
 if [[ -f /usr/local/bin/swarm-node-init.sh ]]; then
     chmod 750 /usr/local/bin/swarm-node-init.sh
@@ -137,11 +141,4 @@ else
     echo "[WARN] swarm-node-init.sh not found (skipping hardening)"
 fi
 
-# =========================================================
-# LEADER SAFETY
-# =========================================================
-if [[ "$CURRENT_IP" == "$PRIMARY_IP" ]]; then
-    echo "[INFO] Leader node — bootstrap user retained for orchestration"
-else
-    echo "[INFO] Bootstrap user ready for leader access"
-fi
+echo "[INFO] swarm-user setup complete"
