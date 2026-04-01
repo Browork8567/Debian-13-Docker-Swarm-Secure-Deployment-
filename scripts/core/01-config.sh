@@ -29,6 +29,7 @@ echo "[INFO] Detected IP: $NODE_IP"
 read -rp "Enter admin username: " ADMIN_USER
 read -rp "Enter admin IP address: " ADMIN_IP
 
+
 # -------------------------------
 # LEADER SELECTION
 # -------------------------------
@@ -39,20 +40,24 @@ if [[ "$IS_LEADER_INPUT" =~ ^[Yy]$ ]]; then
 fi
 
 PRIMARY_MANAGER_IP=""
+MANAGER_RANGE=()
+WORKER_RANGE=()
 
 if [[ "$IS_LEADER" == "true" ]]; then
     PRIMARY_MANAGER_IP="$NODE_IP"
     echo "[INFO] Setting primary manager IP to local node: $PRIMARY_MANAGER_IP"
 
-    read -rp "Enter manager subnet (e.g. 192.168.69.0/24): " MANAGER_SUBNET
-    read -rp "Enter worker subnet (e.g. 192.168.70.0/24): " WORKER_SUBNET
+    echo "[INFO] Enter manager node IPs (space separated)"
+    echo "Example: 192.168.69.10 192.168.69.11 192.168.69.12"
+    read -rp "Manager IPs: " -a MANAGER_RANGE
+
+    echo "[INFO] Enter worker node IPs (space separated)"
+    echo "Example: 192.168.70.10 192.168.70.11"
+    read -rp "Worker IPs: " -a WORKER_RANGE
+
 else
     read -rp "Enter PRIMARY manager IP: " PRIMARY_MANAGER_IP
-
-    MANAGER_SUBNET=""
-    WORKER_SUBNET=""
 fi
-
 # -------------------------------
 # BOOTSTRAP USER PASSWORD
 # -------------------------------
@@ -119,8 +124,8 @@ cat > "$CONFIG_FILE" <<EOF
   "is_leader": $IS_LEADER,
   "primary_manager_ip": "$PRIMARY_MANAGER_IP",
 
-  "manager_subnet": "$MANAGER_SUBNET",
-  "worker_subnet": "$WORKER_SUBNET",
+  "manager_range": $(printf '%s\n' "${MANAGER_RANGE[@]}" | jq -R . | jq -s .),
+  "worker_range": $(printf '%s\n' "${WORKER_RANGE[@]}" | jq -R . | jq -s .),
 
   "bootstrap_user": "$BOOTSTRAP_USER",
   "bootstrap_pass_hash": "$BOOTSTRAP_PASS_HASH",
