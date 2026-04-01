@@ -29,7 +29,6 @@ echo "[INFO] Detected IP: $NODE_IP"
 read -rp "Enter admin username: " ADMIN_USER
 read -rp "Enter admin IP address: " ADMIN_IP
 
-
 # -------------------------------
 # LEADER SELECTION
 # -------------------------------
@@ -43,21 +42,65 @@ PRIMARY_MANAGER_IP=""
 MANAGER_RANGE=()
 WORKER_RANGE=()
 
+# -------------------------------
+# HELPER: EXPAND IP INPUTS
+# -------------------------------
+expand_ips() {
+    local input=$1
+    local ips=()
+
+    # CIDR subnet
+    if [[ "$input" =~ / ]]; then
+        if command -v nmap >/dev/null 2>&1; then
+            mapfile -t ips < <(nmap -n -sL "$input" | awk '/Nmap scan report/{print $5}')
+        else
+            echo "[ERROR] nmap is required to expand CIDR subnets"
+            exit 1
+        fi
+    # Range format, e.g., 192.168.69.10-12
+    elif [[ "$input" =~ ^([0-9]+\.[0-9]+\.[0-9]+)\.([0-9]+)-([0-9]+)$ ]]; then
+        base="${BASH_REMATCH[1]}"
+        start="${BASH_REMATCH[2]}"
+        end="${BASH_REMATCH[3]}"
+        for i in $(seq "$start" "$end"); do
+            ips+=("$base.$i")
+        done
+    # Single IP or space-separated list
+    else
+        read -ra ips <<<"$input"
+    fi
+
+    echo "${ips[@]}"
+}
+
+# -------------------------------
+# ENTER MANAGER AND WORKER NODES
+# -------------------------------
 if [[ "$IS_LEADER" == "true" ]]; then
     PRIMARY_MANAGER_IP="$NODE_IP"
     echo "[INFO] Setting primary manager IP to local node: $PRIMARY_MANAGER_IP"
 
-    echo "[INFO] Enter manager node IPs (space separated)"
-    echo "Example: 192.168.69.10 192.168.69.11 192.168.69.12"
-    read -rp "Manager IPs: " -a MANAGER_RANGE
+    echo "[INFO] Enter manager node IPs"
+    echo "Examples:"
+    echo " - Single IP: 192.168.69.10"
+    echo " - List of IPs: 192.168.69.10 192.168.69.11 192.168.69.12"
+    echo " - Range: 192.168.69.10-12"
+    echo " - Subnet: 192.168.69.0/28"
+    read -rp "Manager IPs: " MANAGER_INPUT
+    MANAGER_RANGE=($(expand_ips "$MANAGER_INPUT"))
 
-    echo "[INFO] Enter worker node IPs (space separated)"
-    echo "Example: 192.168.70.10 192.168.70.11"
-    read -rp "Worker IPs: " -a WORKER_RANGE
-
+    echo "[INFO] Enter worker node IPs"
+    echo "Examples:"
+    echo " - Single IP: 192.168.70.10"
+    echo " - List of IPs: 192.168.70.10 192.168.70.11"
+    echo " - Range: 192.168.70.10-11"
+    echo " - Subnet: 192.168.70.0/28"
+    read -rp "Worker IPs: " WORKER_INPUT
+    WORKER_RANGE=($(expand_ips "$WORKER_INPUT"))
 else
     read -rp "Enter PRIMARY manager IP: " PRIMARY_MANAGER_IP
 fi
+
 # -------------------------------
 # BOOTSTRAP USER PASSWORD
 # -------------------------------
@@ -65,12 +108,10 @@ BOOTSTRAP_USER="bootstrap"
 
 if [[ "$IS_LEADER" == "true" ]]; then
     echo "[INFO] Leader node must define bootstrap password"
-
     read -rsp "Enter bootstrap password: " BOOTSTRAP_PASS
     echo
     read -rsp "Confirm bootstrap password: " BOOTSTRAP_PASS_CONFIRM
     echo
-
     if [[ "$BOOTSTRAP_PASS" != "$BOOTSTRAP_PASS_CONFIRM" ]]; then
         echo "[ERROR] Passwords do not match"
         exit 1
@@ -81,7 +122,6 @@ else
     echo
 fi
 
-# Hash password
 BOOTSTRAP_PASS_HASH=$(openssl passwd -6 "$BOOTSTRAP_PASS")
 
 # -------------------------------
@@ -99,55 +139,29 @@ if [[ "$NAS_ENABLE" =~ ^[Yy]$ ]]; then
     read -rp "Enter NAS IP address: " NAS_IP
     read -rp "Enter NAS share name: " NAS_SHARE
     read -rp "Enter mount path (e.g. /mnt/media): " NAS_PATH
-
     echo "[INFO] UID/GID for container access"
     read -rp "UID: " NAS_UID
     read -rp "GID: " NAS_GID
 fi
 
 # -------------------------------
-# JSON HELPER
-# -------------------------------
-json_val() {
-    [[ -z "$1" ]] && echo null || echo "\"$1\""
-}
-
-# -------------------------------
-# WRITE SYSTEM CONFIG (SAFE)
-# -------------------------------
-cat > "$CONFIG_FILE" <<EOF
-{
-  "node_ip": "$NODE_IP",
-  "admin_user": "$ADMIN_USER",
-  "admin_ip": "$ADMIN_IP",
-
-  "is_leader": $IS_LEADER,
-  "primary_manager_ip": "$PRIMARY_MANAGER_IP",
-
-  "manager_range": $(printf '%s\n' "${MANAGER_RANGE[@]}" | jq -R . | jq -s .),
-  "worker_range": $(printf '%s\n' "${WORKER_RANGE[@]}" | jq -R . | jq -s .),
-
-  "bootstrap_user": "$BOOTSTRAP_USER",
-  "bootstrap_pass_hash": "$BOOTSTRAP_PASS_HASH",
-
-  "nas_ip": $(json_val "$NAS_IP"),
-  "nas_share": $(json_val "$NAS_SHARE"),
-  "nas_path": $(json_val "$NAS_PATH"),
-  "nas_uid": $(json_val "$NAS_UID"),
-  "nas_gid": $(json_val "$NAS_GID")
-}
-EOF
-
-# Validate JSON
-if ! jq empty "$CONFIG_FILE" >/dev/null 2>&1; then
-    echo "[ERROR] Invalid config.json generated"
-    cat "$CONFIG_FILE"
-    exit 1
-fi
-
-# -------------------------------
 # WRITE USER CONFIG (WITH SECRET)
 # -------------------------------
+MANAGER_JSON=$(printf '%s\n' "${MANAGER_RANGE[@]}" | jq -R . | jq -s .)
+WORKER_JSON=$(printf '%s\n' "${WORKER_RANGE[@]}" | jq -R . | jq -s .)
+
+if [[ -n "$NAS_IP" ]]; then
+    NAS_JSON=$(jq -n \
+        --arg ip "$NAS_IP" \
+        --arg share "$NAS_SHARE" \
+        --arg path "$NAS_PATH" \
+        --arg uid "$NAS_UID" \
+        --arg gid "$NAS_GID" \
+        '{ip: $ip, share: $share, path: $path, uid: $uid, gid: $gid}')
+else
+    NAS_JSON="null"
+fi
+
 cat > "$USER_CONFIG_FILE" <<EOF
 {
   "node_ip": "$NODE_IP",
@@ -156,8 +170,10 @@ cat > "$USER_CONFIG_FILE" <<EOF
   "bootstrap_user": "$BOOTSTRAP_USER",
   "bootstrap_password": "$BOOTSTRAP_PASS",
 
-  "manager_subnet": "$MANAGER_SUBNET",
-  "worker_subnet": "$WORKER_SUBNET"
+  "manager_nodes": $MANAGER_JSON,
+  "worker_nodes": $WORKER_JSON,
+
+  "nas": $NAS_JSON
 }
 EOF
 
